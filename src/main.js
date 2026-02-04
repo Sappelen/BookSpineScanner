@@ -1465,9 +1465,9 @@ function showUpgradeTip() {
     <div class="upgrade-tip-content">
       <strong>💡 Better results available!</strong>
       <p>Google Cloud Vision provides much better OCR results, especially for book spines.</p>
+      <p style="font-size:0.85em; opacity:0.85;">Go to Settings (gear icon) to set up your API key.</p>
       <div class="upgrade-tip-actions">
-        <button onclick="this.parentElement.parentElement.parentElement.remove()">Later</button>
-        <button class="primary" onclick="showScreen('settings'); this.parentElement.parentElement.parentElement.remove()">Set up</button>
+        <button onclick="this.parentElement.parentElement.parentElement.remove()">OK</button>
       </div>
     </div>
     <button class="upgrade-tip-close" onclick="dismissUpgradeTip(this)">&times;</button>
@@ -2202,7 +2202,7 @@ function initEventListeners() {
  */
 async function loadCustomizeSettings() {
   try {
-    const response = await fetch('/customize/customize.txt');
+    const response = await fetch(`${import.meta.env.BASE_URL}customize/customize.txt`);
     if (!response.ok) return;
     const text = await response.text();
     const lines = text.split('\n');
