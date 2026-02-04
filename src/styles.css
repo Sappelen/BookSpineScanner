@@ -143,6 +143,12 @@ body {
   object-fit: contain;
 }
 
+/* Invert dark icons to white in dark mode */
+[data-theme="dark"] .gear-icon,
+[data-theme="dark"] .info-icon {
+  filter: invert(1);
+}
+
 .info-content {
   padding: 16px 24px;
   overflow-y: auto;

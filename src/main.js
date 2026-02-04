@@ -104,6 +104,9 @@ function loadSettings() {
     if (saved) {
       const parsed = JSON.parse(saved);
       Object.assign(state.settings, parsed);
+    } else {
+      // No saved settings (new user): follow system dark mode preference
+      state.settings.darkMode = window.matchMedia?.('(prefers-color-scheme: dark)').matches || false;
     }
   } catch (e) {
     console.error('Failed to load settings:', e);
