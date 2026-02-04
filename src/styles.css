@@ -143,21 +143,6 @@ body {
   object-fit: contain;
 }
 
-/* Invert dark icons to white in dark mode */
-[data-theme="dark"] .gear-icon,
-[data-theme="dark"] .info-icon,
-[data-theme="dark"] .header-logo {
-  filter: invert(1);
-}
-
-/* Fallback for browsers that don't pick up data-theme fast enough */
-@media (prefers-color-scheme: dark) {
-  .gear-icon,
-  .info-icon,
-  .header-logo {
-    filter: invert(1);
-  }
-}
 
 .info-content {
   padding: 16px 24px;

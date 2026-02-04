@@ -124,7 +124,28 @@ function saveSettings() {
 
 function applySettings() {
   // Apply dark mode
-  document.documentElement.dataset.theme = state.settings.darkMode ? 'dark' : 'light';
+  const isDark = state.settings.darkMode;
+  document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
+
+  // Switch header icons between light and dark variants
+  const gearImg = document.querySelector('.gear-icon');
+  if (gearImg) {
+    gearImg.src = isDark
+      ? `${import.meta.env.BASE_URL}resources/geardarkmode.png`
+      : `${import.meta.env.BASE_URL}customize/gear.png`;
+    gearImg.onerror = function() {
+      this.src = `${import.meta.env.BASE_URL}resources/${isDark ? 'geardarkmode' : 'gear'}.png`;
+    };
+  }
+  const infoImg = document.querySelector('.info-icon');
+  if (infoImg) {
+    infoImg.src = isDark
+      ? `${import.meta.env.BASE_URL}resources/informationdarkmode.png`
+      : `${import.meta.env.BASE_URL}customize/information.png`;
+    infoImg.onerror = function() {
+      this.src = `${import.meta.env.BASE_URL}resources/${isDark ? 'informationdarkmode' : 'information'}.png`;
+    };
+  }
 
   // Update form fields
   $('#setting-lookup').value = state.settings.lookupSource;
