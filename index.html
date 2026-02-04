@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="description" content="Libiry BookSpineScanner - Scan book spines and extract metadata using OCR">
+  <title>Libiry BookSpineScanner</title>
+  <link rel="icon" type="image/x-icon" href="/resources/app.ico">
+  <link rel="apple-touch-icon" href="/resources/app.ico">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/src/styles.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <img src="/resources/app.ico" alt="Libiry" class="header-logo">
+        <h1 class="header-title">Libiry BookSpineScanner</h1>
+      </div>
+      <!-- Gear icon: try customize/gear.png first, then resources/gear.png, then SVG fallback -->
+      <button id="btn-settings" class="btn-icon" aria-label="Settings">
+        <img src="/customize/gear.png" alt="Settings" class="gear-icon"
+             onerror="this.onerror=function(){this.style.display='none'; this.parentElement.querySelector('.gear-icon-fallback').style.display='block';}; this.src='/resources/gear.png';">
+        <svg class="gear-icon-fallback" style="display:none" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+      </button>
+    </header>
+
+    <!-- Main Screen -->
+    <main id="screen-main" class="screen active">
+      <div class="upload-area" id="upload-area">
+        <input type="file" id="file-input" accept="image/*" capture="environment" multiple hidden>
+
+        <div class="upload-content">
+          <svg class="upload-icon" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+            <path d="M21 15l-5-5L5 21"></path>
+          </svg>
+
+          <p class="upload-text">
+            <span class="desktop-only">Drag & drop a bookshelf photo here</span>
+            <span class="mobile-only">Tap to take a photo</span>
+          </p>
+
+          <div class="upload-buttons">
+            <button id="btn-camera" class="btn btn-primary mobile-only">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                <circle cx="12" cy="13" r="4"></circle>
+              </svg>
+              Take Photo
+            </button>
+            <button id="btn-select-file" class="btn btn-secondary">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              Select File
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Scans -->
+      <section class="recent-scans" id="recent-scans">
+        <h2 class="section-title">Recent Scans</h2>
+        <div id="recent-list" class="recent-list">
+          <p class="empty-state">No recent scans</p>
+        </div>
+      </section>
+    </main>
+
+    <!-- Processing Screen -->
+    <main id="screen-processing" class="screen">
+      <div class="processing-container">
+        <div class="image-preview">
+          <img id="preview-image" src="" alt="Processing image">
+          <canvas id="detection-canvas"></canvas>
+        </div>
+
+        <div class="progress-section">
+          <div class="progress-bar">
+            <div id="progress-fill" class="progress-fill"></div>
+          </div>
+          <p id="progress-text" class="progress-text">Detecting spines...</p>
+        </div>
+
+        <button id="btn-cancel" class="btn btn-secondary">Cancel</button>
+      </div>
+    </main>
+
+    <!-- Results Screen -->
+    <main id="screen-results" class="screen">
+      <div class="results-container">
+        <!-- Image panel -->
+        <div class="results-image-panel">
+          <img id="results-image" src="" alt="Scanned bookshelf">
+          <canvas id="results-canvas"></canvas>
+        </div>
+
+        <!-- Books panel -->
+        <div class="results-books-panel">
+          <div class="results-header">
+            <h2 id="results-count">0 books detected</h2>
+            <div class="results-filters">
+              <button class="filter-btn filter-btn-high" onclick="selectAllByConfidence('high')" title="Select all green / click again to deselect">
+                <span class="filter-btn-label">Select <span id="count-high">0</span></span>
+              </button>
+              <button class="filter-btn filter-btn-medium" onclick="selectAllByConfidence('medium')" title="Select all orange / click again to deselect">
+                <span class="filter-btn-label">Select <span id="count-medium">0</span></span>
+              </button>
+              <button class="filter-btn filter-btn-none" onclick="selectAllByConfidence('none')" title="Select all red / click again to deselect">
+                <span class="filter-btn-label">Select <span id="count-none">0</span></span>
+              </button>
+              <button class="filter-btn filter-btn-delete" onclick="deleteSelected()" title="Delete selected">Delete</button>
+            </div>
+          </div>
+
+          <div id="books-list" class="books-list">
+            <!-- Books will be rendered here -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Action bar -->
+      <div class="action-bar">
+        <button id="btn-new-scan" class="btn btn-secondary">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          New Scan
+        </button>
+        <button id="btn-copy" class="btn btn-secondary">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          Copy
+        </button>
+        <button id="btn-share" class="btn btn-secondary mobile-only" onclick="shareExport()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="18" cy="5" r="3"></circle>
+            <circle cx="6" cy="12" r="3"></circle>
+            <circle cx="18" cy="19" r="3"></circle>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+          </svg>
+          Share
+        </button>
+        <button id="btn-preview" class="btn btn-secondary" onclick="previewExport()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+          Preview
+        </button>
+        <button id="btn-export" class="btn btn-primary">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          Export .md
+        </button>
+        <button id="btn-export-zip" class="btn btn-primary" style="display:none">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          Export .zip
+        </button>
+      </div>
+    </main>
+
+    <!-- Settings Screen -->
+    <main id="screen-settings" class="screen">
+      <div class="settings-container">
+        <div class="settings-header">
+          <button id="btn-settings-back" class="btn-icon" aria-label="Back">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="19" y1="12" x2="5" y2="12"></line>
+              <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+          </button>
+          <h2>Settings</h2>
+        </div>
+
+        <div class="settings-content">
+          <!-- OCR Engine -->
+          <div class="setting-group">
+            <label class="setting-label" for="setting-ocr-engine">OCR Engine</label>
+            <select id="setting-ocr-engine" class="setting-select">
+              <option value="google">Google Cloud Vision (recommended)</option>
+              <option value="tesseract">Tesseract.js (offline)</option>
+            </select>
+            <p class="setting-hint">Google Vision gives much better results for book spines</p>
+          </div>
+
+          <!-- Google Vision API Key -->
+          <div class="setting-group" id="vision-apikey-group">
+            <label class="setting-label" for="setting-vision-apikey">Google Cloud Vision API Key</label>
+            <input type="password" id="setting-vision-apikey" class="setting-input" placeholder="AIza...">
+            <details class="setting-help">
+              <summary>How do I get an API key? (5 min)</summary>
+              <ol>
+                <li>Go to <a href="https://console.cloud.google.com" target="_blank">Google Cloud Console</a></li>
+                <li>Create a new project (or select existing)</li>
+                <li>Search "Cloud Vision API" and click <strong>Enable</strong></li>
+                <li>Go to <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Credentials</a></li>
+                <li>Click "Create Credentials" → "API Key"</li>
+                <li>Copy the key and paste above</li>
+              </ol>
+              <p><strong>Cost:</strong> 1000 scans/month free, then ~$1.50/1000</p>
+            </details>
+          </div>
+
+          <!-- Barcode Mode -->
+          <div class="setting-group">
+            <label class="setting-checkbox">
+              <input type="checkbox" id="setting-barcode">
+              <span>Barcode mode (detect ISBN barcodes instead of text)</span>
+            </label>
+            <p class="setting-hint">Enable when books have visible ISBN barcodes</p>
+          </div>
+
+          <!-- Lookup Source -->
+          <div class="setting-group">
+            <label class="setting-label" for="setting-lookup">Book Lookup Source</label>
+            <select id="setting-lookup" class="setting-select">
+              <option value="openlibrary">Open Library (recommended)</option>
+              <option value="googlebooks">Google Books</option>
+              <option value="both">Both (Open Library first)</option>
+            </select>
+          </div>
+
+          <!-- OCR Language -->
+          <div class="setting-group">
+            <label class="setting-label" for="setting-language">OCR Language</label>
+            <select id="setting-language" class="setting-select">
+              <option value="eng+nld">English + Dutch</option>
+              <option value="eng">English only</option>
+              <option value="nld">Dutch only</option>
+              <option value="deu">German</option>
+              <option value="fra">French</option>
+              <option value="spa">Spanish</option>
+              <option value="ita">Italian</option>
+              <option value="por">Portuguese</option>
+              <option value="pol">Polish</option>
+              <option value="rus">Russian</option>
+              <option value="jpn">Japanese</option>
+              <option value="chi_sim">Chinese (Simplified)</option>
+              <option value="chi_tra">Chinese (Traditional)</option>
+              <option value="kor">Korean</option>
+              <option value="ara">Arabic</option>
+              <option value="hin">Hindi</option>
+              <option value="tur">Turkish</option>
+              <option value="swe">Swedish</option>
+              <option value="nor">Norwegian</option>
+              <option value="dan">Danish</option>
+              <option value="fin">Finnish</option>
+            </select>
+            <p class="setting-hint">Language models are downloaded on demand by Tesseract.js</p>
+          </div>
+
+          <!-- Export Format -->
+          <div class="setting-group">
+            <label class="setting-label" for="setting-format">Export Format</label>
+            <select id="setting-format" class="setting-select">
+              <option value="libiry">Libiry (multiple books per file)</option>
+              <option value="obsidian">Obsidian (one file per book)</option>
+            </select>
+          </div>
+
+          <!-- Filename Pattern -->
+          <div class="setting-group">
+            <label class="setting-label" for="setting-filename">Filename Pattern</label>
+            <input type="text" id="setting-filename" class="setting-input" value="shelf_[DATE]_[TIME].md">
+            <p class="setting-hint">Placeholders: [DATE], [TIME], [author], [booktitle]</p>
+          </div>
+
+          <!-- Field Names -->
+          <div class="setting-group">
+            <h3 class="setting-subheader">Custom Field Names</h3>
+            <p class="setting-hint">Match your existing Obsidian notes</p>
+
+            <div class="field-name-grid">
+              <label for="field-cover">Cover:</label>
+              <input type="text" id="field-cover" class="setting-input-small" placeholder="cover">
+
+              <label for="field-booktitle">Title:</label>
+              <input type="text" id="field-booktitle" class="setting-input-small" placeholder="booktitle">
+
+              <label for="field-author">Author:</label>
+              <input type="text" id="field-author" class="setting-input-small" placeholder="author">
+
+              <label for="field-isbn-analog">ISBN Print:</label>
+              <input type="text" id="field-isbn-analog" class="setting-input-small" placeholder="isbn_analog">
+
+              <label for="field-isbn-digital">ISBN Digital:</label>
+              <input type="text" id="field-isbn-digital" class="setting-input-small" placeholder="isbn_digital">
+            </div>
+          </div>
+
+          <!-- Checkboxes -->
+          <div class="setting-group">
+            <label class="setting-checkbox">
+              <input type="checkbox" id="setting-metadata" checked>
+              <span>Include scan metadata in export</span>
+            </label>
+
+            <label class="setting-checkbox">
+              <input type="checkbox" id="setting-confidence" checked>
+              <span>Include confidence fields in export</span>
+            </label>
+          </div>
+
+          <!-- Google Books API Key -->
+          <div class="setting-group">
+            <label class="setting-label" for="setting-apikey">Google Books API Key (optional)</label>
+            <input type="text" id="setting-apikey" class="setting-input" placeholder="AIza...">
+            <p class="setting-hint">For higher API quota</p>
+          </div>
+
+          <!-- Dark Mode -->
+          <div class="setting-group">
+            <label class="setting-checkbox">
+              <input type="checkbox" id="setting-darkmode">
+              <span>Dark mode</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Preview Modal -->
+    <div id="preview-modal" class="modal-overlay">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Export Preview</h2>
+          <button class="btn-icon" onclick="closePreview()" aria-label="Close">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <pre id="preview-content" class="preview-content"></pre>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closePreview()">Close</button>
+          <button class="btn btn-primary" onclick="closePreview(); document.getElementById('btn-export').click();">Export</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PWA Install banner -->
+    <button id="btn-install" class="btn-install" onclick="installPWA()" style="display:none">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="7 10 12 15 17 10"></polyline>
+        <line x1="12" y1="15" x2="12" y2="3"></line>
+      </svg>
+      Install App
+    </button>
+
+    <!-- Toast notifications -->
+    <div id="toast" class="toast"></div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

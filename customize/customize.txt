@@ -1,0 +1,3 @@
+Background color: #6F9D9F
+Background font color: black
+Rounded corners y/n: n

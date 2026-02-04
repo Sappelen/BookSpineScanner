@@ -1,0 +1,295 @@
+LIBIRY BOOKSPINESCANNER - Functional Specification
+=============================================
+
+OVERVIEW
+--------
+TESTEDBYUSER: Libiry BookSpineScanner is a Progressive Web App (PWA) that photographs bookshelves and extracts book metadata using OCR and book database lookups
+TESTEDBYUSER: Output format is flat .md files compatible with Libiry and Obsidian
+TESTEDBYUSER: The user gets the option to create one .md file per book or one file per photo (default: per photo)
+TESTEDBYUSER: The tool works independently from Libiry but it produces Libiry-compatible markdown files (that can also be read by Obsidian and Calibre, f.e.).
+
+PLATFORM SUPPORT
+----------------
+TESTEDBYUSER: PWA runs in modern browsers (Chrome, Firefox, Safari, Edge)
+TOBETESTED: Mobile: camera access for live photography
+TESTEDBYUSER: Desktop: file upload for existing photos
+TESTEDBYUSER: Offline mode: OCR works offline, book lookup requires internet
+TOBETESTED: No app store installation required
+
+USER INTERFACE - MAIN SCREEN
+----------------------------
+TESTEDBYUSER: Clean, minimal interface with single primary action
+TOBETESTED: Mobile view: large "Take Photo" button with camera icon
+TESTEDBYUSER: Desktop view: drag-and-drop zone + "Select File" button
+TESTEDBYUSER: Below input area: list of recent scans (stored in localStorage)
+TESTEDBYUSER: For the settings icon (gear) in the top right corner, use gear icon gear.png when one exists in BookSpineScanner's own customize folder.
+TOBETESTED: If no gear.png is found in folder customizing, use gear.png from folder resources
+TESTEDBYUSER: The look currently in customizing/customize.txt (background colour, font colour, rounded corners set to N) will be the default look for new users
+
+USER INTERFACE - PROCESSING SCREEN
+----------------------------------
+TESTEDBYUSER: A barcode mode can be set by the user for books with visible ISBN. If set, only barcodes are detected. This functionality can be tested with image "BookSpineScanner Issue.png" in which there are 2 barcodes visible.
+TOBETESTED: In barcode mode, if a 13 digit numeric code could be read (even if the picture quality was considered too low for proper processing): the book is not set to red but to orange and all characteristics belonging to this barcode are filled in for the book.
+TOBETESTED: In barcode mode, if (through the open library API and through the Google books API) no information can be found for the ISBN number, fill in the isbn number and put "https://search.worldcat.org/search?q=[ISBN number]&offset=1" as the booktitle.
+TOBETESTED: Progress indicator: "Detecting spines..." -> "Reading text..." -> "Looking up books..."
+TOBETESTED: Cancel button to abort processing
+
+USER INTERFACE - RESULTS SCREEN
+-------------------------------
+TESTEDBYUSER: Split view: original image (left/top) and book list (right/bottom)
+TESTEDBYUSER: To get the same look and feel as the Libiry app, use fields Background color and Background font color from BookSpineScanner's own customize.txt file, as described in file C:\Claudeproject\BookSpineScanner\resources\settings_defaults.txt
+TESTEDBYUSER: To get the same look and feel as the Libiry app, use field Rounded corners y/n from BookSpineScanner's own customize.txt file, as described in file C:\Claudeproject\BookSpineScanner\resources\settings_defaults.txt. Make the rounded courners of all of the screen elements straight when the field value does not equal Y or y. See example "Still rounded corners.png"
+TESTEDBYUSER: bovenin het  scherm staat de tekst "Libiry BookSpineScanner"
+TESTEDBYUSER: app.ico uit folder resources wordt getoond als favicon in de browserbalk (desktop), als app-logo op het telefoonscherm en bovenin uiterst links in het scherm, direct voor de tekst "Libiry BookSpineScanner"
+TESTEDBYUSER: Book list shows all detected books with status indicators
+TESTEDBYUSER: Status indicators: green checkmark (high confidence), yellow warning (needs review), red X (not found)
+TESTEDBYUSER: User can move the checkmarks to red or green (click on status dot to cycle: none->medium->high->none)
+TESTEDBYUSER: For lines marked as red, the preliminary book title is shown in the list view, for orange and green: the book title is shown in the list view
+TESTEDBYUSER: Each book entry is expandable to show full details and edit fields
+TESTEDBYUSER: (at least all the) red lines also show a field "preliminary" booktitle where the text is filled in without any guessing as to what book it is
+TESTEDBYUSER: "needs review" entries show candidate dropdown for selection
+TESTEDBYUSER: "not found" entries show editable fields for manual entry
+TESTEDBYUSER: Bottom action bar: "Export .md" button, "Copy to clipboard" button, "New Scan" button
+TESTEDBYUSER: User can remove or add book entry lines
+
+EDITABLE FIELDS PER BOOK
+------------------------
+TESTEDBYUSER: booktitle - text field, pre-filled from lookup
+TESTEDBYUSER: author - text field, pre-filled from lookup
+TESTEDBYUSER: isbn_analog - text field, pre-filled from lookup (physical book ISBN)
+TESTEDBYUSER: isbn_digital - text field, pre-filled from lookup (ebook ISBN if available)
+TESTEDBYUSER: cover - URL field, pre-filled with cover image URL from lookup
+TESTEDBYUSER: User edits are preserved when switching between books
+
+SETTINGS SCREEN
+---------------
+TESTEDBYUSER: Lookup source: dropdown with "Open Library (default)", "Google Books", "Both (Open Library first)"
+TESTEDBYUSER: Default export filename pattern: text field, default "shelf_[DATE]_[TIME].md"
+TESTEDBYUSER: Language preference for OCR: dropdown (Dutch, English, German, French, Spanish, Auto-detect)
+TESTEDBYUSER: Include scan metadata in export: checkbox, default ON
+TESTEDBYUSER: Include confidence fields in export: checkbox, default ON
+TESTEDBYUSER: Dark mode: toggle, follows system preference by default
+
+CONFIGURABLE FIELD NAMES
+------------------------
+TESTEDBYUSER: Field name cover: default "cover", user can specify alternative (e.g. "coverimage", "thumbnail")
+TESTEDBYUSER: Field name booktitle: default "booktitle", user can specify alternative (e.g. "title", "name")
+TESTEDBYUSER: Field name author: default "author", user can specify alternative (e.g. "auteur", "writer")
+TESTEDBYUSER: Field name isbn_analog: default "isbn_analog", user can specify alternative (e.g. "isbn_physical", "isbn_print")
+TESTEDBYUSER: Field name isbn_digital: default "isbn_digital", user can specify alternative (e.g. "isbn_ebook", "eisbn")
+TESTEDBYUSER: Settings are stored in localStorage and used when generating export files
+TESTEDBYUSER: Export uses configured field names so output matches user's existing Obsidian/Libiry setup
+
+IMAGE PROCESSING PIPELINE
+-------------------------
+TESTEDBYUSER: Step 1 - Spine Detection: Use OpenCV.js to detect vertical regions (book spines)
+TESTEDBYUSER: Step 2 - Region Extraction: Crop and straighten each detected spine region
+TESTEDBYUSER: Step 3 - Text Orientation: Detect if text is rotated (90 or 270 degrees) and correct
+TESTEDBYUSER: Step 4 - OCR: Run Tesseract.js on image
+TESTEDBYUSER: Step 5 - Text Parsing: Extract probable title, author, publisher from raw OCR text
+TESTEDBYUSER: Step 6 - Book Lookup: Query book database API with extracted text
+TESTEDBYUSER: Step 7 - Confidence Scoring: Calculate match confidence based on OCR quality and lookup results
+
+OCR CONFIGURATION
+-----------------
+TESTEDBYUSER: OCR engine selector in settings: "Google Cloud Vision (recommended)" or "Tesseract.js (offline)"
+TESTEDBYUSER: Google Cloud Vision API integration using DOCUMENT_TEXT_DETECTION (same as Google Docs OCR) for superior quality on book spines
+TESTEDBYUSER: Google Vision API key field in settings (required for Google Vision)
+TESTEDBYUSER: Fallback engine: Tesseract.js (runs in browser, no server needed, works offline)
+TESTEDBYUSER: Language models: Dutch + English loaded by default
+TESTEDBYUSER: Additional languages downloadable on demand
+TESTEDBYUSER: Preprocessing: contrast enhancement, noise reduction, deskewing
+TESTEDBYUSER: Handle vertical text (common on book spines) - via DOCUMENT_TEXT_DETECTION
+
+BOOK LOOKUP - OPEN LIBRARY
+--------------------------
+TESTEDBYUSER: API endpoint: https://openlibrary.org/search.json
+TESTEDBYUSER: Search by: title, author, or combined
+TESTEDBYUSER: Response includes: title, author, ISBN-10, ISBN-13, cover ID
+TESTEDBYUSER: Cover URL pattern: https://covers.openlibrary.org/b/isbn/[ISBN]-M.jpg
+TESTEDBYUSER: No API key required
+TESTEDBYUSER: Rate limiting: max 1 request per second
+
+BOOK LOOKUP - GOOGLE BOOKS (OPTIONAL)
+-------------------------------------
+TESTEDBYUSER: API endpoint: https://www.googleapis.com/books/v1/volumes
+TESTEDBYUSER: Search by: intitle, inauthor, or general query
+TESTEDBYUSER: Response includes: title, authors[], industryIdentifiers[], imageLinks
+TESTEDBYUSER: industryIdentifiers contains ISBN_10 and ISBN_13
+TESTEDBYUSER: API key recommended for higher quota (works without for low volume)
+TESTEDBYUSER: Setting to enter personal API key (stored in localStorage)
+
+BOOK LOOKUP - WORLDCAT
+
+
+CONFIDENCE SCORING
+------------------
+TESTEDBYUSER: HIGH (green): OCR text clearly matches lookup result (>85% similarity)
+TESTEDBYUSER: MEDIUM (yellow): Multiple candidates found, or moderate similarity (50-85%)
+TESTEDBYUSER: NONE (red): No lookup match, or OCR produced insufficient text (<3 characters)
+TESTEDBYUSER: Display confidence score as percentage in detailed view
+
+OUTPUT FORMAT - EXPORT OPTIONS
+------------------------------
+TESTEDBYUSER: Export format dropdown with two presets:
+TESTEDBYUSER: - "Libiry format": flat key: value lines, multiple books per file, minimal YAML header
+TESTEDBYUSER: - "Obsidian format": YAML frontmatter, one book per file, all fields in frontmatter
+TESTEDBYUSER: Checkbox "Create separate file per book" (default OFF for Libiry, ON for Obsidian preset)
+
+OUTPUT FORMAT - LIBIRY FORMAT (MULTIPLE BOOKS PER FILE)
+-------------------------------------------------------
+TESTEDBUUSER: One .md file per scan (per bookshelf photo)
+TESTEDBYUSER: YAML frontmatter with scan metadata only
+TESTEDBYUSER: Each book as a block with flat key: value lines
+TESTEDBYUSER: Additional scanner fields that Libiry ignores but user can review
+
+TESTEDBYUSER: YAML frontmatter structure:
+  ---
+  scan_date: [ISO date]
+  scan_source: [original filename]
+  books_detected: [count]
+  lookup_source: [openlibrary|googlebooks|both]
+  scanner_version: [version number]
+  ---
+
+TESTEDBYUSER: Book entry structure (repeats for each book):
+  cover: [URL or empty]
+  booktitle: [title]
+  author: [author name]
+  isbn_analog: [physical book ISBN]
+  isbn_digital: [ebook ISBN if available]
+  scan_confidence: [high|medium|none]
+  scan_candidates: [pipe-separated alternatives, only if medium confidence]
+  scan_raw_ocr: [original OCR text, only if none confidence]
+  [blank line separator]
+
+OUTPUT FORMAT - OBSIDIAN FORMAT (ONE BOOK PER FILE)
+---------------------------------------------------
+TESTEDBYUSER: One .md file per detected book
+TESTEDBYUSER: All book fields in YAML frontmatter for Obsidian Bases compatibility
+TESTEDBYUSER: Filename pattern according to specifications filled in by the user in the settings screen, or otherwise the default setting of: [author] - [booktitle].md (sanitized for filesystem)
+
+TESTEDBYUSER: File structure:
+  ---
+  cover: "[[cover_url]]"
+  booktitle: "[title]"
+  author: "[author name]"
+  isbn_analog: "[physical book ISBN]"
+  isbn_digital: "[ebook ISBN if available]"
+  scan_confidence: [high|medium|none]
+  scan_source: "[original photo filename]"
+  scan_date: [ISO date]
+  ---
+
+  # [booktitle]
+
+  [Empty space for user notes]
+
+EXPORT OPTIONS
+--------------
+TESTEDBYUSER: "Download .md" - saves file(s) to device Downloads folder
+TESTEDBYUSER: For lines marked as red: put the (manually altered) preliminary booktitle in field booktitle, and clear out all other book fields
+TOBETESTED: "Download as ZIP" - at least when there are multiple files, offer both download md as ZIP download buttons
+TESTEDBYUSER: "Copy to clipboard" - copies full .md content for pasting (single file only)
+TOBETESTED: "Share" (mobile) - uses native share API
+TESTEDBYUSER: Filename follows pattern from settings, with date/time substitution
+
+DATA STORAGE
+------------
+TESTEDBYUSER: localStorage: settings, field name configuration, recent scans list (metadata only)
+TESTEDBYUSER: IndexedDB: cached book lookup results (reduces API calls)
+TESTEDBYUSER: No server-side storage - fully client-side application
+TESTEDBYUSER: Export is the only way to persist full scan results
+
+ERROR HANDLING
+--------------
+TOBETESTED: Camera access denied: show instructions to enable in browser settings
+TOBETESTED: Image too small: warn user, suggest minimum resolution (1000px width)
+TOBETESTED: No spines detected: suggest better lighting or angle, offer manual entry mode
+TOBETESTED: API rate limited: queue requests, show progress, retry with backoff
+TOBETESTED: Offline during lookup: complete OCR, mark all as "needs review", offer retry when online
+
+ACCESSIBILITY
+-------------
+TOBETESTED: WCAG 2.1 AA compliance
+TOBETESTED: All interactive elements keyboard accessible
+TESTEDBYUSER: Screen reader labels for status indicators
+TESTEDBYUSER: Sufficient color contrast (not relying on color alone for status)
+TOBETESTED: Focus indicators visible
+
+MOBILE-SPECIFIC
+---------------
+TESTEDBYUSER: Responsive design, mobile-first
+TOBETESTED: Touch-friendly tap targets (min 44x44px)
+TOBETESTED: Pinch-to-zoom on result image
+TOBETESTED: Pull-to-refresh on scan list
+TOBETESTED: Camera defaults to rear camera
+TOBETESTED: Option to select from photo library instead of live capture
+
+DESKTOP-SPECIFIC
+----------------
+TESTEDBYUSER: Drag-and-drop file upload
+TOBETESTED: Keyboard shortcuts: Ctrl+O (open file), Ctrl+S (save .md), Ctrl+C (copy)
+TESTEDBYUSER: Multi-file batch processing: select multiple images, process sequentially
+TOBETESTED: Progress bar for batch processing
+
+INTEGRATION WITH LIBIRY
+-----------------------
+TESTEDBYUSER: Export .md files are directly usable in Libiry book folders AND in Obsidian
+TESTEDBYUSER: Users can also manually create .md files or use their existing files (Libiry feature)
+TESTEDBYUSER: Libiry reads: cover, booktitle, author, isbn_analog, isbn_digital (or configured alternatives)
+TESTEDBYUSER: Libiry ignores: scan_confidence, scan_candidates, scan_raw_ocr, unknown YAML fields
+TESTEDBYUSER: Libiry supports both YAML frontmatter and flat key: value format
+TESTEDBYUSER: User workflow: Scan -> Review -> Export -> Place .md in Libiry folder -> Refresh Libiry
+
+USER EXPERIENCE & ONBOARDING
+----------------------------
+TESTEDBYUSER: API Key Onboarding - Default to Tesseract (works without setup), show upgrade tip when results are poor
+TESTEDBYUSER: Settings page shows step-by-step instructions for getting Google Vision API key
+TESTEDBYUSER: Cost info shown in settings (1000 scans/month free, then ~$1.50/1000)
+
+TOBETESTED: PWA Installation - Smooth user experience. How does the user know they can install the app?
+  - Browser sometimes shows "Add to Home Screen" banner automatically
+  - Custom install button shown when browser supports it
+  - After install: splash screen with app icon
+  - Toast notification on successful install
+
+TOBEBUILTNICETOHAVE: Direct Libiry integration via local file system API (Chrome only)
+
+Mobile UX improvements
+----------------------
+TOBEBUILTNICETOHAVE: Large touch targets (44x44px minimum)
+TOBEBUILTNICETOHAVE: Swipe gestures for navigation
+TOBEBUILTNICETOHAVE: Haptic feedback on actions
+TOBEBUILTNICETOHAVE: Camera viewfinder with guidelines for bookshelf framing
+TOBEBUILTNICETOHAVE: Flash on/off toggle for poor lighting
+
+Results review UX
+-----------------
+TESTEDBYUSER: Drag & drop to reorder
+TESTEDBYUSER: Bulk select buttons for deletion
+TOBETESTED: Double click a bulk select button again for deselection
+TESTEDBYUSER: in case of a bulk select, all checkboxes of that selection are marked
+TESTEDBYUSER: Integrate the green [number]/orange [number]/red [number] indicators and the "Select all green" / "Select all orange" / "Select all red" buttons into 3 buttons, coloured green, orange and red respectively, with Select [number] on top of each button in bold in the same font that is used for all other screen elements
+TOBETESTED: The Delete-button has the same font as the green, orange and red buttons, and is also bold
+TESTEDBYUSER: Preview export before download
+
+Error handling & Help
+---------------------
+TOBETESTED: Camera access denied: clear instructions per browser/OS
+TOBETESTED: Invalid API key: clear error message + link to docs
+
+Hosting & Distribution
+----------------------
+TOBEBUILT: GitHub Pages
+TOBEBUILT: Documentation for end user
+TOBEBUILTNICETOHAVE: Mention in Libiry documentation (not just yet)
+
+TECHNICAL STACK
+---------------
+TOBETESTED: Frontend: HTML5 + CSS3 + vanilla JavaScript (or lightweight framework)
+TOBETESTED: OCR: Tesseract.js v4+
+TOBETESTED: Image processing: OpenCV.js
+TOBETESTED: PWA: Service Worker for offline support, Web App Manifest
+TOBETESTED: Build: Vite or similar for bundling
+TOBETESTED: No backend required - fully static hosting (GitHub Pages, Netlify, etc.)

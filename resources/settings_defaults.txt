@@ -1,0 +1,50 @@
+# BookSpine Scanner - Default Settings
+
+# The following values are used when no user preferences are saved in folder customize file customize.txt
+
+# Look and feel:
+Background color: #6F9D9F
+Button font color: white
+Button color: #793F4E
+Search box color: white
+Tile font color: black
+Background font color: black
+Search box font color: black
+Rounded corners y/n: Y
+Only selected file types y/n: y
+
+
+# The following values are used when no user preferences are saved in localStorage
+
+# Lookup source: openlibrary | googlebooks | both
+Lookup source: openlibrary
+
+# Export filename pattern (supports [DATE] and [TIME] placeholders)
+Export filename pattern: shelf_[DATE]_[TIME].md
+
+# OCR language: dutch | english | german | french | spanish | auto
+OCR language: auto
+
+# Include scan metadata in export: y | n
+Include scan metadata: y
+
+# Include confidence fields in export: y | n
+Include confidence fields: y
+
+# Export format preset: libiry | obsidian
+Export format: libiry
+
+# Create separate file per book: y | n
+Separate file per book: n
+
+# Configurable field names (leave empty to use defaults)
+# These allow compatibility with existing Obsidian notes
+Field name cover:
+Field name booktitle:
+Field name author:
+Field name isbn_analog:
+Field name isbn_digital:
+
+# Google Books API key (optional, for higher quota)
+Google Books API key:
+
