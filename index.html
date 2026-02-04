@@ -9,6 +9,18 @@
   <link rel="icon" type="image/x-icon" href="resources/app.ico">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="/src/styles.css">
+  <script>
+    // One-time cache bust: unregister old service workers and clear caches
+    // Remove this block after all users have updated
+    if ('serviceWorker' in navigator && !sessionStorage.getItem('sw-cleaned-v2')) {
+      caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        regs.forEach(r => r.unregister());
+      });
+      sessionStorage.setItem('sw-cleaned-v2', '1');
+      setTimeout(() => location.reload(), 500);
+    }
+  </script>
 </head>
 <body>
   <div id="app">
