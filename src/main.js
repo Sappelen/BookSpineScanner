@@ -1735,6 +1735,86 @@ window.closePreview = function() {
   if (modal) modal.classList.remove('active');
 };
 
+// Information modal — fetches and renders README.md
+window.showInfo = async function() {
+  const modal = document.getElementById('info-modal');
+  const content = document.getElementById('info-content');
+  if (!modal || !content) return;
+
+  content.innerHTML = '<p>Loading...</p>';
+  modal.classList.add('active');
+
+  try {
+    const response = await fetch(`${import.meta.env.BASE_URL}README.md`);
+    if (!response.ok) throw new Error('Not found');
+    const md = await response.text();
+    content.innerHTML = simpleMarkdownToHtml(md);
+  } catch {
+    content.innerHTML = '<p>Could not load documentation.</p>';
+  }
+};
+
+window.closeInfo = function() {
+  const modal = document.getElementById('info-modal');
+  if (modal) modal.classList.remove('active');
+};
+
+// Lightweight markdown to HTML converter (no external dependency)
+function simpleMarkdownToHtml(md) {
+  let html = md
+    // Escape HTML entities
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // Code blocks (``` ... ```)
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) =>
+    `<pre><code>${code.trim()}</code></pre>`
+  );
+
+  // Inline code
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+  // Headers
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+  // Bold and italic
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+  // Links
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+  // Tables
+  html = html.replace(/^(\|.+\|)\n\|[-| :]+\|\n((?:\|.+\|\n?)*)/gm, (_, header, body) => {
+    const thCells = header.split('|').filter(c => c.trim()).map(c => `<th>${c.trim()}</th>`).join('');
+    const rows = body.trim().split('\n').map(row => {
+      const cells = row.split('|').filter(c => c.trim()).map(c => `<td>${c.trim()}</td>`).join('');
+      return `<tr>${cells}</tr>`;
+    }).join('');
+    return `<table><thead><tr>${thCells}</tr></thead><tbody>${rows}</tbody></table>`;
+  });
+
+  // Unordered lists
+  html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+  html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
+
+  // Ordered lists
+  html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+
+  // Paragraphs (lines that aren't already wrapped in tags)
+  html = html.split('\n\n').map(block => {
+    block = block.trim();
+    if (!block) return '';
+    if (block.startsWith('<')) return block;
+    return `<p>${block.replace(/\n/g, '<br>')}</p>`;
+  }).join('\n');
+
+  return html;
+}
+
 window.cycleConfidence = function(id) {
   const book = state.books.find(b => b.id === id);
   if (book) {

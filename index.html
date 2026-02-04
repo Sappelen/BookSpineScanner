@@ -18,15 +18,22 @@
         <img src="resources/app.ico" alt="Libiry" class="header-logo">
         <h1 class="header-title">Libiry BookSpineScanner</h1>
       </div>
-      <!-- Gear icon: try customize/gear.png first, then resources/gear.png, then SVG fallback -->
-      <button id="btn-settings" class="btn-icon" aria-label="Settings">
-        <img src="customize/gear.png" alt="Settings" class="gear-icon"
-             onerror="this.onerror=function(){this.style.display='none'; this.parentElement.querySelector('.gear-icon-fallback').style.display='block';}; this.src='resources/gear.png';">
-        <svg class="gear-icon-fallback" style="display:none" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="3"></circle>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-        </svg>
-      </button>
+      <div class="header-right">
+        <!-- Gear icon: try customize/gear.png first, then resources/gear.png, then SVG fallback -->
+        <button id="btn-settings" class="btn-icon" aria-label="Settings">
+          <img src="customize/gear.png" alt="Settings" class="gear-icon"
+               onerror="this.onerror=function(){this.style.display='none'; this.parentElement.querySelector('.gear-icon-fallback').style.display='block';}; this.src='resources/gear.png';">
+          <svg class="gear-icon-fallback" style="display:none" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+        <!-- Information icon: try customize/information.png first, then resources/information.png -->
+        <button id="btn-info" class="btn-icon" aria-label="Information" onclick="showInfo()">
+          <img src="customize/information.png" alt="Information" class="info-icon"
+               onerror="this.onerror=null; this.src='resources/information.png';">
+        </button>
+      </div>
     </header>
 
     <!-- Main Screen -->
@@ -355,6 +362,25 @@
         <div class="modal-footer">
           <button class="btn btn-secondary" onclick="closePreview()">Close</button>
           <button class="btn btn-primary" onclick="closePreview(); document.getElementById('btn-export').click();">Export</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Info Modal (README.md) -->
+    <div id="info-modal" class="modal-overlay">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>About Libiry BookSpineScanner</h2>
+          <button class="btn-icon" onclick="closeInfo()" aria-label="Close">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        <div id="info-content" class="info-content"></div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeInfo()">Close</button>
         </div>
       </div>
     </div>

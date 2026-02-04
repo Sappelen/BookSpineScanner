@@ -11,27 +11,31 @@ TESTEDBYUSER: The tool works independently from Libiry but it produces Libiry-co
 PLATFORM SUPPORT
 ----------------
 TESTEDBYUSER: PWA runs in modern browsers (Chrome, Firefox, Safari, Edge)
-TOBETESTED: Mobile: camera access for live photography
+TESTEDBYUSER: Mobile: camera access for live photography
 TESTEDBYUSER: Desktop: file upload for existing photos
 TESTEDBYUSER: Offline mode: OCR works offline, book lookup requires internet
-TOBETESTED: No app store installation required
+TESTEDBYUSER: No app store installation required
 
 USER INTERFACE - MAIN SCREEN
 ----------------------------
 TESTEDBYUSER: Clean, minimal interface with single primary action
-TOBETESTED: Mobile view: large "Take Photo" button with camera icon
+TESTEDBYUSER: Mobile view: large "Take Photo" button with camera icon
 TESTEDBYUSER: Desktop view: drag-and-drop zone + "Select File" button
 TESTEDBYUSER: Below input area: list of recent scans (stored in localStorage)
 TESTEDBYUSER: For the settings icon (gear) in the top right corner, use gear icon gear.png when one exists in BookSpineScanner's own customize folder.
 TOBETESTED: If no gear.png is found in folder customizing, use gear.png from folder resources
+TOBETESTED: For the information icon in the top right corner, use icon information.png when one exists in BookSpineScanner's own customize folder.
+TOBETESTED: If no information.png is found in folder customizing, use information.png from folder resources
+TOBETESTED: Pressing the information icon shows document README.md
+
 TESTEDBYUSER: The look currently in customizing/customize.txt (background colour, font colour, rounded corners set to N) will be the default look for new users
 
 USER INTERFACE - PROCESSING SCREEN
 ----------------------------------
 TESTEDBYUSER: A barcode mode can be set by the user for books with visible ISBN. If set, only barcodes are detected. This functionality can be tested with image "BookSpineScanner Issue.png" in which there are 2 barcodes visible.
-TOBETESTED: In barcode mode, if a 13 digit numeric code could be read (even if the picture quality was considered too low for proper processing): the book is not set to red but to orange and all characteristics belonging to this barcode are filled in for the book.
+TESTEDBYUSER: In barcode mode, if a 13 digit numeric code could be read (even if the picture quality was considered too low for proper processing): the book is not set to red but to orange and all characteristics belonging to this barcode are filled in for the book.
 TOBETESTED: In barcode mode, if (through the open library API and through the Google books API) no information can be found for the ISBN number, fill in the isbn number and put "https://search.worldcat.org/search?q=[ISBN number]&offset=1" as the booktitle.
-TOBETESTED: Progress indicator: "Detecting spines..." -> "Reading text..." -> "Looking up books..."
+TESTEDBYUSER: Progress indicator: "Detecting spines..." -> "Reading text..." -> "Looking up books..."
 TOBETESTED: Cancel button to abort processing
 
 USER INTERFACE - RESULTS SCREEN
@@ -204,7 +208,7 @@ TESTEDBYUSER: Export is the only way to persist full scan results
 ERROR HANDLING
 --------------
 TOBETESTED: Camera access denied: show instructions to enable in browser settings
-TOBETESTED: Image too small: warn user, suggest minimum resolution (1000px width)
+TESTEDBYUSER: Image too small: warn user, suggest minimum resolution (1000px width)
 TOBETESTED: No spines detected: suggest better lighting or angle, offer manual entry mode
 TOBETESTED: API rate limited: queue requests, show progress, retry with backoff
 TOBETESTED: Offline during lookup: complete OCR, mark all as "needs review", offer retry when online
@@ -220,10 +224,10 @@ TOBETESTED: Focus indicators visible
 MOBILE-SPECIFIC
 ---------------
 TESTEDBYUSER: Responsive design, mobile-first
-TOBETESTED: Touch-friendly tap targets (min 44x44px)
+TESTEDBYUSER: Touch-friendly tap targets (min 44x44px)
 TOBETESTED: Pinch-to-zoom on result image
 TOBETESTED: Pull-to-refresh on scan list
-TOBETESTED: Camera defaults to rear camera
+TESTEDBYUSER: Camera defaults to rear camera
 TOBETESTED: Option to select from photo library instead of live capture
 
 DESKTOP-SPECIFIC
@@ -281,8 +285,8 @@ TOBETESTED: Invalid API key: clear error message + link to docs
 
 Hosting & Distribution
 ----------------------
-TOBEBUILT: GitHub Pages
-TOBEBUILT: Documentation for end user
+TOBETESTED: GitHub Pages
+TOBETESTED: Documentation for end user
 TOBEBUILTNICETOHAVE: Mention in Libiry documentation (not just yet)
 
 TECHNICAL STACK
