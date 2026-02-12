@@ -32,6 +32,7 @@ const state = {
     barcodeMode: false,
     googleApiKey: '',
     googleVisionApiKey: '',
+    europeanaApiKey: '',
     fieldNames: {
       cover: '',
       booktitle: '',
@@ -158,6 +159,9 @@ function applySettings() {
   $('#setting-darkmode').checked = state.settings.darkMode;
   $('#setting-apikey').value = state.settings.googleApiKey;
   $('#setting-vision-apikey').value = state.settings.googleVisionApiKey;
+  // Europeana API key veld vullen indien aanwezig
+  const europeanaKeyField = $('#setting-europeana-apikey');
+  if (europeanaKeyField) europeanaKeyField.value = state.settings.europeanaApiKey || '';
 
   // Show/hide Vision API key field based on OCR engine selection
   const visionKeyGroup = $('#vision-apikey-group');
@@ -188,6 +192,9 @@ function collectSettings() {
   state.settings.darkMode = $('#setting-darkmode').checked;
   state.settings.googleApiKey = $('#setting-apikey').value;
   state.settings.googleVisionApiKey = $('#setting-vision-apikey').value;
+  // Europeana API key ophalen
+  const europeanaKeyField = $('#setting-europeana-apikey');
+  if (europeanaKeyField) state.settings.europeanaApiKey = europeanaKeyField.value;
 
   const barcodeEl = $('#setting-barcode');
   if (barcodeEl) state.settings.barcodeMode = barcodeEl.checked;
@@ -1300,6 +1307,17 @@ async function lookupBooks(parsedBooks) {
           confidence = calculateConfidence(searchQuery, bookData);
         }
       }
+
+      // Europeana lookup: als 'europeana' of 'all' is geselecteerd en nog geen resultaat
+      // Europeana is vooral sterk in historische en Europese werken
+      if (!bookData && (state.settings.lookupSource === 'europeana' || state.settings.lookupSource === 'all')) {
+        const euResult = await searchEuropeana(searchQuery);
+        if (euResult) {
+          bookData = euResult.best;
+          candidates = euResult.candidates;
+          confidence = calculateConfidence(searchQuery, bookData);
+        }
+      }
     } catch (error) {
       console.error('Lookup error for:', searchQuery, error);
     }
@@ -1388,6 +1406,113 @@ async function searchGoogleBooks(query) {
     return result;
   } catch (error) {
     console.error('Google Books search error:', error);
+    return null;
+  }
+}
+
+/**
+ * Search Europeana API for book metadata
+ * Europeana is strong for historical and European cultural heritage works
+ * API docs: https://pro.europeana.eu/page/search
+ *
+ * @param {string} query - Search query (title, author, or combined)
+ * @returns {Object|null} - { best, candidates } or null if not found
+ */
+async function searchEuropeana(query) {
+  try {
+    // Europeana vereist een API key
+    if (!state.settings.europeanaApiKey) {
+      console.warn('Europeana API key not configured');
+      return null;
+    }
+
+    // Check cache first
+    const cached = await getCachedLookup('europeana', query);
+    if (cached) return cached;
+
+    // Europeana Search API endpoint
+    // qf=TYPE:TEXT filtert op tekstuele werken (boeken, manuscripten, etc.)
+    // We zoeken ook specifiek naar "what:book" voor betere resultaten
+    const url = `https://api.europeana.eu/record/v2/search.json?wskey=${state.settings.europeanaApiKey}&query=${encodeURIComponent(query)}&qf=TYPE:TEXT&rows=5&profile=standard`;
+
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      console.error('Europeana API error:', response.status, response.statusText);
+      return null;
+    }
+
+    const data = await response.json();
+
+    if (!data.items || data.items.length === 0) return null;
+
+    // Map Europeana response naar ons standaard formaat
+    // Europeana structuur is anders: dcCreator, dcTitleLangAware, etc.
+    const candidates = data.items.slice(0, 5).map(item => {
+      // Titel: probeer eerst dcTitleLangAware, dan title array
+      let title = '';
+      if (item.dcTitleLangAware) {
+        // dcTitleLangAware is een object met taalcodes als keys
+        const titleObj = item.dcTitleLangAware;
+        // Probeer Nederlands, Engels, of neem de eerste beschikbare
+        title = titleObj.nl?.[0] || titleObj.en?.[0] || titleObj.def?.[0] ||
+                Object.values(titleObj)[0]?.[0] || '';
+      } else if (item.title && item.title.length > 0) {
+        title = item.title[0];
+      }
+
+      // Auteur: dcCreator array
+      let author = '';
+      if (item.dcCreator && item.dcCreator.length > 0) {
+        author = item.dcCreator[0];
+      } else if (item.dcCreatorLangAware) {
+        const creatorObj = item.dcCreatorLangAware;
+        author = creatorObj.def?.[0] || Object.values(creatorObj)[0]?.[0] || '';
+      }
+
+      // Cover/thumbnail: edmPreview of edmIsShownBy
+      let cover = '';
+      if (item.edmPreview && item.edmPreview.length > 0) {
+        cover = item.edmPreview[0];
+      } else if (item.edmIsShownBy && item.edmIsShownBy.length > 0) {
+        cover = item.edmIsShownBy[0];
+      }
+
+      // ISBN: Europeana heeft zelden ISBN, maar we proberen dcIdentifier
+      // Europeana focust op cultureel erfgoed, niet moderne ISBN-catalogisering
+      let isbn = '';
+      if (item.dcIdentifier) {
+        // Zoek naar iets dat op een ISBN lijkt (10 of 13 cijfers)
+        const isbnMatch = item.dcIdentifier.find(id =>
+          /^(?:\d{10}|\d{13}|97[89]\d{10})$/.test(id?.replace(/[-\s]/g, ''))
+        );
+        if (isbnMatch) {
+          isbn = isbnMatch.replace(/[-\s]/g, '');
+        }
+      }
+
+      return {
+        title: title,
+        author: author,
+        isbn: isbn,
+        isbn_digital: '',  // Europeana heeft geen digitale ISBN onderscheid
+        cover: cover,
+        // Extra info voor debug/display
+        europeanaId: item.id,
+        dataProvider: item.dataProvider?.[0] || ''
+      };
+    });
+
+    // Filter kandidaten zonder titel eruit
+    const validCandidates = candidates.filter(c => c.title);
+
+    if (validCandidates.length === 0) return null;
+
+    const result = { best: validCandidates[0], candidates: validCandidates };
+    await setCachedLookup('europeana', query, result);
+    return result;
+  } catch (error) {
+    console.error('Europeana search error:', error);
     return null;
   }
 }

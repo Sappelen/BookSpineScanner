@@ -33,6 +33,7 @@ TESTEDBYUSER: The look currently in customizing/customize.txt (background colour
 USER INTERFACE - PROCESSING SCREEN
 ----------------------------------
 TESTEDBYUSER: A barcode mode can be set by the user for books with visible ISBN. If set, only barcodes are detected. This functionality can be tested with image "BookSpineScanner Issue.png" in which there are 2 barcodes visible.
+TOBEBUILT: An 'include photo in export' can be set by the user. Id set, the photo will be excluded in the export.
 TESTEDBYUSER: In barcode mode, if a 13 digit numeric code could be read (even if the picture quality was considered too low for proper processing): the book is not set to red but to orange and all characteristics belonging to this barcode are filled in for the book.
 TOBETESTED: In barcode mode, if (through the open library API and through the Google books API) no information can be found for the ISBN number, fill in the isbn number and put "https://search.worldcat.org/search?q=[ISBN number]&offset=1" as the booktitle.
 TESTEDBYUSER: Progress indicator: "Detecting spines..." -> "Reading text..." -> "Looking up books..."
@@ -122,6 +123,8 @@ TESTEDBYUSER: Response includes: title, authors[], industryIdentifiers[], imageL
 TESTEDBYUSER: industryIdentifiers contains ISBN_10 and ISBN_13
 TESTEDBYUSER: API key recommended for higher quota (works without for low volume)
 TESTEDBYUSER: Setting to enter personal API key (stored in localStorage)
+
+TOBEBUILT:  De Europeana API wordt ook uitgevraagd in de BookSpineScanner (na Open Library en Google Books)
 
 BOOK LOOKUP - WORLDCAT
 

@@ -256,6 +256,8 @@
               <option value="openlibrary">Open Library (recommended)</option>
               <option value="googlebooks">Google Books</option>
               <option value="both">Both (Open Library first)</option>
+              <option value="all">All sources (OL → Google → Europeana)</option>
+              <option value="europeana">Europeana only</option>
             </select>
           </div>
 
@@ -345,6 +347,13 @@
             <label class="setting-label" for="setting-apikey">Google Books API Key (optional)</label>
             <input type="text" id="setting-apikey" class="setting-input" placeholder="AIza...">
             <p class="setting-hint">For higher API quota</p>
+          </div>
+
+          <!-- Europeana API Key -->
+          <div class="setting-group">
+            <label class="setting-label" for="setting-europeana-apikey">Europeana API Key (required for Europeana)</label>
+            <input type="text" id="setting-europeana-apikey" class="setting-input" placeholder="xxxxxxxx">
+            <p class="setting-hint">Get free key at <a href="https://pro.europeana.eu/page/get-api" target="_blank">pro.europeana.eu</a> - Best for historical/European works</p>
           </div>
 
           <!-- Dark Mode -->
