@@ -28,6 +28,7 @@ const state = {
     filenamePattern: 'shelf_[DATE]_[TIME].md',
     includeMetadata: true,
     includeConfidence: true,
+    includePhotoInExport: false,
     darkMode: false,
     barcodeMode: false,
     googleApiKey: '',
@@ -156,6 +157,7 @@ function applySettings() {
   $('#setting-filename').value = state.settings.filenamePattern;
   $('#setting-metadata').checked = state.settings.includeMetadata;
   $('#setting-confidence').checked = state.settings.includeConfidence;
+  $('#setting-include-photo').checked = state.settings.includePhotoInExport;
   $('#setting-darkmode').checked = state.settings.darkMode;
   $('#setting-apikey').value = state.settings.googleApiKey;
   $('#setting-vision-apikey').value = state.settings.googleVisionApiKey;
@@ -189,6 +191,7 @@ function collectSettings() {
   state.settings.filenamePattern = $('#setting-filename').value;
   state.settings.includeMetadata = $('#setting-metadata').checked;
   state.settings.includeConfidence = $('#setting-confidence').checked;
+  state.settings.includePhotoInExport = $('#setting-include-photo').checked;
   state.settings.darkMode = $('#setting-darkmode').checked;
   state.settings.googleApiKey = $('#setting-apikey').value;
   state.settings.googleVisionApiKey = $('#setting-vision-apikey').value;
@@ -2089,17 +2092,64 @@ function downloadMarkdown() {
   files.forEach((file, i) => {
     setTimeout(() => downloadFile(file.filename, file.content), i * 100);
   });
-  showToast(`Exported ${files.length} file(s)`);
+
+  // Als 'include photo in export' aan staat, download ook de gescande foto
+  // Dit geeft de gebruiker de originele scan samen met de metadata
+  if (state.settings.includePhotoInExport && state.currentImage?.dataUrl) {
+    const photoFilename = state.currentImage.filename || 'scan.jpg';
+    setTimeout(() => downloadDataUrl(state.currentImage.dataUrl, photoFilename), files.length * 100);
+    showToast(`Exported ${files.length} file(s) + photo`);
+  } else {
+    showToast(`Exported ${files.length} file(s)`);
+  }
 }
 
 function downloadMarkdownAsZip() {
   const files = generateMarkdown();
+
+  // Als 'include photo in export' aan staat, voeg de gescande foto toe aan de ZIP
+  // De foto wordt als apart bestand meegenomen zodat gebruikers de originele scan behouden
+  if (state.settings.includePhotoInExport && state.currentImage?.dataUrl) {
+    const photoFile = dataUrlToFile(state.currentImage.dataUrl, state.currentImage.filename || 'scan.jpg');
+    if (photoFile) {
+      files.push(photoFile);
+    }
+  }
+
   downloadAsZip(files);
-  showToast(`Exported ${files.length} files as ZIP`);
+  const photoNote = state.settings.includePhotoInExport && state.currentImage?.dataUrl ? ' (including photo)' : '';
+  showToast(`Exported ${files.length} file(s) as ZIP${photoNote}`);
+}
+
+/**
+ * Converteer een data URL naar een file object voor ZIP export
+ * @param {string} dataUrl - De base64 data URL van de afbeelding
+ * @param {string} filename - Bestandsnaam voor in de ZIP
+ * @returns {Object|null} - { filename, binaryContent } of null bij fout
+ */
+function dataUrlToFile(dataUrl, filename) {
+  try {
+    // Data URL format: data:image/jpeg;base64,/9j/4AAQ...
+    const parts = dataUrl.split(',');
+    if (parts.length !== 2) return null;
+
+    const base64 = parts[1];
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+
+    return { filename, binaryContent: bytes };
+  } catch (e) {
+    console.error('Failed to convert data URL to file:', e);
+    return null;
+  }
 }
 
 function downloadAsZip(files) {
   // Minimal ZIP file creation (store-only, no compression)
+  // Ondersteunt zowel text (content) als binary (binaryContent) bestanden
   const encoder = new TextEncoder();
   const localHeaders = [];
   const centralHeaders = [];
@@ -2107,7 +2157,8 @@ function downloadAsZip(files) {
 
   for (const file of files) {
     const nameBytes = encoder.encode(file.filename);
-    const contentBytes = encoder.encode(file.content);
+    // Ondersteun zowel text content als binary content (voor foto's)
+    const contentBytes = file.binaryContent || encoder.encode(file.content);
     const crc = crc32(contentBytes);
 
     // Local file header (30 bytes + name + content)
@@ -2212,6 +2263,20 @@ function downloadFile(filename, content) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Download een data URL als bestand (voor foto export)
+ * @param {string} dataUrl - De base64 data URL
+ * @param {string} filename - Bestandsnaam voor de download
+ */
+function downloadDataUrl(dataUrl, filename) {
+  const a = document.createElement('a');
+  a.href = dataUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 window.shareExport = async function() {
