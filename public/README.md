@@ -31,7 +31,7 @@ No installation required. Works on desktop and mobile.
 2. **OCR** -- Text is read from each spine using Google Cloud Vision or Tesseract.js
 3. **Book lookup** -- Extracted text is searched in Open Library and/or Google Books
 4. **Review** -- Results are shown with confidence indicators (green/orange/red)
-5. **Export** -- Save as Libiry-compatible or Obsidian-compatible markdown files
+5. **Export** -- Save as Libiry- and Obsidian-compatible markdown files
 
 ## OCR engines
 
@@ -64,7 +64,7 @@ For books with a visible ISBN barcode:
 1. Enable "Barcode mode" in Settings
 2. Take a photo of the barcodes
 3. The app reads ISBN numbers directly from the barcodes
-4. Books are looked up by ISBN in Open Library and Google Books
+4. Books are looked up by ISBN in Open Library, Google Books and Europeana
 5. If a book is not found in these databases, a WorldCat search link is provided as the book title -- click it to look up the book manually
 
 ## Phone camera vs. desktop upload -- why results may differ
@@ -94,18 +94,17 @@ Click on a confidence dot to cycle its status (red > orange > green > red).
 
 ## Export formats
 
-### Libiry format (default)
+### One file per photo (default)
 
-- One '.md' file per scan (per photo)
 - YAML header with scan metadata
 - Each book as a block with 'key: value' lines
-- Compatible with Libiry, readable in any text editor
+- Compatible with Libiry, readable in any other text editor or reader
 
-### Obsidian format
+### One file per book
 
 - One '.md' file per book
 - All metadata in YAML frontmatter
-- Compatible with Obsidian Bases, Dataview, and other Obsidian plugins
+- Compatible with Obsidian, Logseq, Calibre, Libiry and any other text editor or reader
 - Download as ZIP when exporting multiple books
 
 ## Customizing options
@@ -128,5 +127,7 @@ If your existing Obsidian or Libiry setup uses different field names, you can co
 4. Place the '.md' file(s) in your Libiry book folder
 5. Refresh Libiry
 
-Libiry reads the fields 'cover', 'booktitle', 'author', 'isbn_analog', and 'isbn_digital' from the markdown files. 
+Libiry reads the fields 'cover', 'booktitle', 'author', 'isbn', 'publisher', 'year', 'language' and 'tags' from the markdown files.
 All other fields are ignored by Libiry but preserved in the file.
+
+**Note:** Libiry supports a maximum of 100 books per markdown file for performance reasons. If a scan contains more than 100 books, BookSpineScanner automatically splits the export into multiple files (`shelf_part1.md`, `shelf_part2.md`, etc.).
