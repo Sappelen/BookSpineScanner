@@ -2223,6 +2223,7 @@ function generateMarkdown() {
         `${fieldNames.isbn}: "${isbn_a}"`,
         `${fieldNames.publisher}: "${publisher}"`,
         `${fieldNames.year}: "${year}"`,
+        `${fieldNames.language}: "${language}"`,
         `${fieldNames.tags}: "${allTags}"`,
         s.includeConfidence ? `scan_confidence: ${book.confidence}` : null,
         s.includeMetadata ? `scan_source: "${state.currentImage?.filename || ''}"` : null,
