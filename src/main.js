@@ -20,6 +20,8 @@ const state = {
   isProcessing: false,
   isOffline: !navigator.onLine,
   deferredInstallPrompt: null, // PWA install prompt
+  shelfTags: '',  // Tags for current shelf/scan (e.g. "bovensteplank, wishlist")
+  tagHistory: [], // Eerder gebruikte tags voor autocomplete suggesties
   settings: {
     lookupSource: 'openlibrary',
     ocrEngine: 'tesseract',
@@ -38,8 +40,16 @@ const state = {
       cover: '',
       booktitle: '',
       author: '',
-      isbn_analog: '',
-      isbn_digital: ''
+      isbn: '',           // Was isbn, isbn_digital verwijderd
+      rating: '',         // Goodreads: My Rating
+      publisher: '',      // Goodreads: Publisher
+      year: '',           // Goodreads: Year Published
+      language: '',       // Extra: taal
+      tags: '',           // Goodreads: Bookshelves
+      series: '',         // Extra: serie naam
+      series_index: '',   // Extra: serie volgnummer
+      description: '',    // Goodreads: My Review
+      notes: ''           // Goodreads: Private Notes
     }
   },
   recentScans: []
@@ -113,6 +123,17 @@ function loadSettings() {
   } catch (e) {
     console.error('Failed to load settings:', e);
   }
+
+  // Load tag history for autocomplete
+  try {
+    const tagHistory = localStorage.getItem('bookspine-tag-history');
+    if (tagHistory) {
+      state.tagHistory = JSON.parse(tagHistory);
+    }
+  } catch (e) {
+    console.error('Failed to load tag history:', e);
+  }
+
   applySettings();
 }
 
@@ -122,6 +143,53 @@ function saveSettings() {
   } catch (e) {
     console.error('Failed to save settings:', e);
   }
+}
+
+/**
+ * Save tag history to localStorage for autocomplete suggestions.
+ * Keeps max 50 unique tags, most recently used first.
+ */
+function saveTagHistory() {
+  try {
+    localStorage.setItem('bookspine-tag-history', JSON.stringify(state.tagHistory));
+  } catch (e) {
+    console.error('Failed to save tag history:', e);
+  }
+}
+
+/**
+ * Add tags to history for autocomplete suggestions.
+ * Tags are stored individually (not as comma-separated string).
+ */
+function addTagsToHistory(tagsString) {
+  if (!tagsString || !tagsString.trim()) return;
+
+  // Split by comma, trim whitespace, filter empty
+  const newTags = tagsString.split(',')
+    .map(t => t.trim())
+    .filter(t => t.length > 0);
+
+  // Add to front of history, remove duplicates, limit to 50
+  const existing = new Set(state.tagHistory);
+  for (const tag of newTags) {
+    existing.delete(tag); // Remove if exists (will be re-added at front)
+  }
+
+  state.tagHistory = [...newTags, ...Array.from(existing)].slice(0, 50);
+  saveTagHistory();
+  updateTagSuggestions();
+}
+
+/**
+ * Update the datalist with tag suggestions for autocomplete.
+ */
+function updateTagSuggestions() {
+  const datalist = document.getElementById('tags-suggestions');
+  if (!datalist) return;
+
+  datalist.innerHTML = state.tagHistory
+    .map(tag => `<option value="${tag}">`)
+    .join('');
 }
 
 function applySettings() {
@@ -179,8 +247,11 @@ function applySettings() {
   $('#field-cover').value = state.settings.fieldNames.cover;
   $('#field-booktitle').value = state.settings.fieldNames.booktitle;
   $('#field-author').value = state.settings.fieldNames.author;
-  $('#field-isbn-analog').value = state.settings.fieldNames.isbn_analog;
-  $('#field-isbn-digital').value = state.settings.fieldNames.isbn_digital;
+  $('#field-isbn-analog').value = state.settings.fieldNames.isbn;
+  $('#field-tags').value = state.settings.fieldNames.tags || '';
+
+  // Update tag autocomplete suggestions
+  updateTagSuggestions();
 }
 
 function collectSettings() {
@@ -205,8 +276,8 @@ function collectSettings() {
   state.settings.fieldNames.cover = $('#field-cover').value;
   state.settings.fieldNames.booktitle = $('#field-booktitle').value;
   state.settings.fieldNames.author = $('#field-author').value;
-  state.settings.fieldNames.isbn_analog = $('#field-isbn-analog').value;
-  state.settings.fieldNames.isbn_digital = $('#field-isbn-digital').value;
+  state.settings.fieldNames.isbn = $('#field-isbn-analog').value;
+  state.settings.fieldNames.tags = $('#field-tags').value;
 
   saveSettings();
   applySettings();
@@ -914,9 +985,14 @@ async function processImage() {
           preliminaryTitle: isbn,
           booktitle: bookData?.title || (!bookData && cleanIsbn ? worldcatUrl : ''),
           author: bookData?.author || '',
-          isbn_analog: cleanIsbn,
-          isbn_digital: bookData?.isbn_digital || '',
+          isbn: cleanIsbn,
           cover: bookData?.cover || '',
+          // Extra metadata uit API lookups
+          publisher: bookData?.publisher || '',
+          year: bookData?.year || '',
+          language: bookData?.language || '',
+          subjects: bookData?.subjects || '',
+          description: bookData?.description || '',
           confidence,
           candidates: [],
         });
@@ -1036,12 +1112,16 @@ async function processImage() {
         preliminaryTitle: parsed.possibleTitle || parsed.rawText || '',
         booktitle: '',
         author: parsed.possibleAuthor || '',
-        isbn_analog: '',
-        isbn_digital: '',
+        isbn: '',
         cover: '',
+        // Extra metadata (leeg in offline mode)
+        publisher: '',
+        year: '',
+        language: '',
+        subjects: '',
+        description: '',
         confidence: 'none',
         candidates: [],
-  
       }));
       showToast('Offline: book lookup skipped. Connect to internet and re-scan for better results.');
     } else {
@@ -1325,15 +1405,21 @@ async function lookupBooks(parsedBooks) {
       console.error('Lookup error for:', searchQuery, error);
     }
 
+    // Extra metadata velden in Goodreads volgorde
     results.push({
       id: crypto.randomUUID(),
       rawOcr: parsed.rawText || '',
       preliminaryTitle: parsed.possibleTitle || parsed.rawText || '', // Raw OCR text before lookup
       booktitle: bookData?.title || '',  // Only from lookup, not raw OCR
       author: bookData?.author || parsed.possibleAuthor || '',
-      isbn_analog: bookData?.isbn || '',
-      isbn_digital: bookData?.isbn_digital || '',
+      isbn: bookData?.isbn || '',
       cover: bookData?.cover || '',
+      // Extra metadata uit API lookups (Goodreads volgorde)
+      publisher: bookData?.publisher || '',
+      year: bookData?.year || '',
+      language: bookData?.language || '',
+      description: bookData?.description || '',
+      subjects: bookData?.subjects || '',  // API subjects (los van user-entered shelf tags)
       confidence: confidence,
       candidates: candidates,
       spineRegion: null // TODO: Add when spine detection is implemented
@@ -1355,12 +1441,20 @@ async function searchOpenLibrary(query) {
 
     if (!data.docs || data.docs.length === 0) return null;
 
+    // Extra metadata velden ophalen uit Open Library API
+    // Volgorde gebaseerd op Goodreads CSV export
     const candidates = data.docs.slice(0, 5).map(doc => ({
       title: doc.title,
       author: doc.author_name?.[0] || '',
       isbn: doc.isbn?.[0] || '',
-      isbn_digital: doc.isbn?.find(i => i.startsWith('978')) || '',
-      cover: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : ''
+      cover: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : '',
+      // Extra metadata in Goodreads volgorde
+      publisher: doc.publisher?.[0] || '',
+      year: doc.publish_year?.[0]?.toString() || '',
+      language: doc.language?.[0] || '',
+      description: doc.first_sentence?.value || doc.first_sentence || '',
+      // subjects worden tags (Goodreads: Bookshelves)
+      subjects: doc.subject?.slice(0, 5).join(', ') || ''
     }));
 
     const result = { best: candidates[0], candidates };
@@ -1389,18 +1483,32 @@ async function searchGoogleBooks(query) {
 
     if (!data.items || data.items.length === 0) return null;
 
+    // Extra metadata velden ophalen uit Google Books API
+    // Volgorde gebaseerd op Goodreads CSV export
     const candidates = data.items.slice(0, 5).map(item => {
       const info = item.volumeInfo;
       const identifiers = info.industryIdentifiers || [];
       const isbn10 = identifiers.find(i => i.type === 'ISBN_10')?.identifier || '';
       const isbn13 = identifiers.find(i => i.type === 'ISBN_13')?.identifier || '';
 
+      // Extract year from publishedDate (can be "2020-03-15" or "2020")
+      let year = '';
+      if (info.publishedDate) {
+        year = info.publishedDate.split('-')[0];
+      }
+
       return {
         title: info.title,
         author: info.authors?.[0] || '',
         isbn: isbn13 || isbn10,
-        isbn_digital: isbn13 || '',
-        cover: info.imageLinks?.thumbnail || ''
+        cover: info.imageLinks?.thumbnail || '',
+        // Extra metadata in Goodreads volgorde
+        publisher: info.publisher || '',
+        year: year,
+        language: info.language || '',
+        description: info.description || '',
+        // categories worden tags (Goodreads: Bookshelves)
+        subjects: info.categories?.slice(0, 5).join(', ') || ''
       };
     });
 
@@ -1494,12 +1602,56 @@ async function searchEuropeana(query) {
         }
       }
 
+      // Extra metadata velden uit Europeana
+      // Publisher: dcPublisher
+      let publisher = '';
+      if (item.dcPublisher && item.dcPublisher.length > 0) {
+        publisher = item.dcPublisher[0];
+      }
+
+      // Year: jaar uit dcDate of year veld
+      let year = '';
+      if (item.year && item.year.length > 0) {
+        year = item.year[0];
+      } else if (item.dcDate && item.dcDate.length > 0) {
+        // Probeer jaar te extraheren uit dcDate (kan "1920", "1920-01-01", etc. zijn)
+        const dateMatch = item.dcDate[0].match(/\d{4}/);
+        if (dateMatch) year = dateMatch[0];
+      }
+
+      // Language: dcLanguage
+      let language = '';
+      if (item.dcLanguage && item.dcLanguage.length > 0) {
+        language = item.dcLanguage[0];
+      }
+
+      // Description: dcDescription
+      let description = '';
+      if (item.dcDescription && item.dcDescription.length > 0) {
+        description = item.dcDescription[0];
+      } else if (item.dcDescriptionLangAware) {
+        const descObj = item.dcDescriptionLangAware;
+        description = descObj.nl?.[0] || descObj.en?.[0] || descObj.def?.[0] ||
+                      Object.values(descObj)[0]?.[0] || '';
+      }
+
+      // Subjects: dcSubject (voor tags)
+      let subjects = '';
+      if (item.dcSubject && item.dcSubject.length > 0) {
+        subjects = item.dcSubject.slice(0, 5).join(', ');
+      }
+
       return {
         title: title,
         author: author,
         isbn: isbn,
-        isbn_digital: '',  // Europeana heeft geen digitale ISBN onderscheid
         cover: cover,
+        // Extra metadata in Goodreads volgorde
+        publisher: publisher,
+        year: year,
+        language: language,
+        description: description,
+        subjects: subjects,
         // Extra info voor debug/display
         europeanaId: item.id,
         dataProvider: item.dataProvider?.[0] || ''
@@ -1666,12 +1818,24 @@ function renderBooksList() {
           <input type="text" value="${escapeHtml(book.author)}" onchange="updateBook('${book.id}', 'author', this.value)">
         </div>
         <div class="book-field">
-          <label>ISBN (Print)</label>
-          <input type="text" value="${escapeHtml(book.isbn_analog)}" onchange="updateBook('${book.id}', 'isbn_analog', this.value)">
+          <label>ISBN</label>
+          <input type="text" value="${escapeHtml(book.isbn)}" onchange="updateBook('${book.id}', 'isbn', this.value)">
         </div>
         <div class="book-field">
-          <label>ISBN (Digital)</label>
-          <input type="text" value="${escapeHtml(book.isbn_digital)}" onchange="updateBook('${book.id}', 'isbn_digital', this.value)">
+          <label>Publisher</label>
+          <input type="text" value="${escapeHtml(book.publisher || '')}" onchange="updateBook('${book.id}', 'publisher', this.value)">
+        </div>
+        <div class="book-field">
+          <label>Year</label>
+          <input type="text" value="${escapeHtml(book.year || '')}" onchange="updateBook('${book.id}', 'year', this.value)">
+        </div>
+        <div class="book-field">
+          <label>Language</label>
+          <input type="text" value="${escapeHtml(book.language || '')}" onchange="updateBook('${book.id}', 'language', this.value)">
+        </div>
+        <div class="book-field">
+          <label>Tags</label>
+          <input type="text" value="${escapeHtml(book.subjects || '')}" onchange="updateBook('${book.id}', 'subjects', this.value)">
         </div>
         <div class="book-field">
           <label>Cover URL</label>
@@ -1722,9 +1886,14 @@ window.selectCandidate = function(id, index) {
     const candidate = book.candidates[index];
     book.booktitle = candidate.title;
     book.author = candidate.author;
-    book.isbn_analog = candidate.isbn;
-    book.isbn_digital = candidate.isbn_digital;
+    book.isbn = candidate.isbn;
     book.cover = candidate.cover;
+    // Extra metadata van kandidaat overnemen
+    book.publisher = candidate.publisher || '';
+    book.year = candidate.year || '';
+    book.language = candidate.language || '';
+    book.subjects = candidate.subjects || '';
+    book.description = candidate.description || '';
     book.confidence = 'medium';
     renderBooksList();
   }
@@ -1743,9 +1912,14 @@ window.addBook = function() {
     preliminaryTitle: '',
     booktitle: '',
     author: '',
-    isbn_analog: '',
-    isbn_digital: '',
+    isbn: '',
     cover: '',
+    // Extra metadata velden
+    publisher: '',
+    year: '',
+    language: '',
+    subjects: '',
+    description: '',
     confidence: 'none',
     candidates: []
   });
@@ -1983,24 +2157,43 @@ window.cycleConfidence = function(id) {
 
 function generateMarkdown() {
   const s = state.settings;
+  // Veldnamen in Goodreads volgorde
   const fieldNames = {
     cover: s.fieldNames.cover || 'cover',
     booktitle: s.fieldNames.booktitle || 'booktitle',
     author: s.fieldNames.author || 'author',
-    isbn_analog: s.fieldNames.isbn_analog || 'isbn_analog',
-    isbn_digital: s.fieldNames.isbn_digital || 'isbn_digital'
+    isbn: s.fieldNames.isbn || 'isbn',
+    rating: 'rating',           // Goodreads: My Rating (leeg, user vult later in)
+    publisher: 'publisher',     // Goodreads: Publisher
+    year: 'year',               // Goodreads: Year Published
+    language: 'language',       // Extra: taal
+    tags: s.fieldNames.tags || 'tags',  // Goodreads: Bookshelves
+    series: 'series',           // Extra: serie naam (leeg)
+    series_index: 'series_index', // Extra: serie volgnummer (leeg)
+    description: 'description', // Goodreads: My Review / beschrijving
+    notes: 'notes'              // Goodreads: Private Notes (leeg)
   };
+
+  // Get shelf tags from input (applies to all books in this scan)
+  const shelfTags = state.shelfTags || '';
 
   if (s.exportFormat === 'obsidian') {
     // One file per book - return array
     return state.books.map(book => {
-      // For red (none confidence) items: use preliminary title, clear other fields
+      // For red (none confidence) items: use preliminary title, clear ALL other fields
       const isRed = book.confidence === 'none';
       const title = isRed ? (book.preliminaryTitle || book.booktitle || '') : (book.booktitle || '');
       const author = isRed ? '' : (book.author || '');
-      const isbn_a = isRed ? '' : (book.isbn_analog || '');
-      const isbn_d = isRed ? '' : (book.isbn_digital || '');
+      const isbn_a = isRed ? '' : (book.isbn || '');
       const cover = isRed ? '' : (book.cover || '');
+      // Extra metadata (leeg bij rode items)
+      const publisher = isRed ? '' : (book.publisher || '');
+      const year = isRed ? '' : (book.year || '');
+      const language = isRed ? '' : (book.language || '');
+      const description = isRed ? '' : (book.description || '');
+      // Combineer API subjects met user shelf tags
+      const apiSubjects = isRed ? '' : (book.subjects || '');
+      const allTags = [shelfTags, apiSubjects].filter(t => t).join(', ');
 
       const filenamePattern = s.filenamePattern || '[author] - [booktitle].md';
       const filename = sanitizeFilename(
@@ -2011,13 +2204,16 @@ function generateMarkdown() {
           .replace('[TIME]', new Date().toTimeString().split(' ')[0].replace(/:/g, '-'))
       );
       const finalFilename = filename.endsWith('.md') ? filename : filename + '.md';
+      // Volgorde gebaseerd op Goodreads CSV export
       const content = [
         '---',
         `${fieldNames.cover}: "${cover}"`,
         `${fieldNames.booktitle}: "${title}"`,
         `${fieldNames.author}: "${author}"`,
-        `${fieldNames.isbn_analog}: "${isbn_a}"`,
-        `${fieldNames.isbn_digital}: "${isbn_d}"`,
+        `${fieldNames.isbn}: "${isbn_a}"`,
+        `${fieldNames.publisher}: "${publisher}"`,
+        `${fieldNames.year}: "${year}"`,
+        `${fieldNames.tags}: "${allTags}"`,
         s.includeConfidence ? `scan_confidence: ${book.confidence}` : null,
         s.includeMetadata ? `scan_source: "${state.currentImage?.filename || ''}"` : null,
         s.includeMetadata ? `scan_date: ${new Date().toISOString()}` : null,
@@ -2032,38 +2228,49 @@ function generateMarkdown() {
     });
   } else {
     // Libiry format - multiple books per file
+    // Libiry ondersteunt max 100 boeken per file voor performance (O(n²) duplicate detection)
+    // Bij meer dan 100 boeken: automatisch splitsen in meerdere bestanden
+    const MAX_BOOKS_PER_FILE = 100;
     const date = new Date();
-    const filename = s.filenamePattern
+    const baseFilename = s.filenamePattern
       .replace('[DATE]', date.toISOString().split('T')[0])
       .replace('[TIME]', date.toTimeString().split(' ')[0].replace(/:/g, '-'));
 
-    const header = s.includeMetadata ? [
-      '---',
-      `scan_date: ${date.toISOString()}`,
-      `scan_source: ${state.currentImage?.filename || ''}`,
-      `books_detected: ${state.books.length}`,
-      `lookup_source: ${s.lookupSource}`,
-      `scanner_version: 1.0.0`,
-      '---',
-      ''
-    ].join('\n') : '';
-
-    const booksContent = state.books.map(book => {
-      // For red (none confidence) items: use preliminary title, clear other fields
+    // Helper functie om boek naar markdown content te converteren
+    // Volgorde gebaseerd op Goodreads CSV export
+    // Extra velden worden leeggelaten bij rode items (confidence: none)
+    const bookToMarkdown = (book) => {
       const isRed = book.confidence === 'none';
       const title = isRed ? (book.preliminaryTitle || book.booktitle || '') : (book.booktitle || '');
       const author = isRed ? '' : (book.author || '');
-      const isbn_a = isRed ? '' : (book.isbn_analog || '');
-      const isbn_d = isRed ? '' : (book.isbn_digital || '');
+      const isbn_a = isRed ? '' : (book.isbn || '');
       const cover = isRed ? '' : (book.cover || '');
+      // Extra metadata (leeg bij rode items)
+      const publisher = isRed ? '' : (book.publisher || '');
+      const year = isRed ? '' : (book.year || '');
+      const language = isRed ? '' : (book.language || '');
+      const description = isRed ? '' : (book.description || '');
+      // Combineer API subjects met user shelf tags
+      const apiSubjects = isRed ? '' : (book.subjects || '');
+      const allTags = [shelfTags, apiSubjects].filter(t => t).join(', ');
 
+      // Basis velden (cover is delimiter voor Libiry multi-book files)
       const lines = [
         `${fieldNames.cover}: ${cover}`,
         `${fieldNames.booktitle}: ${title}`,
         `${fieldNames.author}: ${author}`,
-        `${fieldNames.isbn_analog}: ${isbn_a}`,
-        `${fieldNames.isbn_digital}: ${isbn_d}`
+        `${fieldNames.isbn}: ${isbn_a}`
       ];
+
+      // Extra metadata in Goodreads volgorde (alleen toevoegen als gevuld)
+      // rating blijft leeg (user vult later in)
+      if (publisher) lines.push(`${fieldNames.publisher}: ${publisher}`);
+      if (year) lines.push(`${fieldNames.year}: ${year}`);
+      if (language) lines.push(`${fieldNames.language}: ${language}`);
+      if (allTags) lines.push(`${fieldNames.tags}: ${allTags}`);
+      // series en series_index blijven leeg (niet beschikbaar in APIs)
+      if (description) lines.push(`${fieldNames.description}: ${description}`);
+      // notes blijft leeg (user vult later in)
 
       if (s.includeConfidence) {
         lines.push(`scan_confidence: ${book.confidence}`);
@@ -2077,9 +2284,42 @@ function generateMarkdown() {
       }
 
       return lines.join('\n');
-    }).join('\n\n');
+    };
 
-    return [{ filename, content: header + booksContent }];
+    // Splits boeken in chunks van max 100
+    const chunks = [];
+    for (let i = 0; i < state.books.length; i += MAX_BOOKS_PER_FILE) {
+      chunks.push(state.books.slice(i, i + MAX_BOOKS_PER_FILE));
+    }
+
+    // Genereer een bestand per chunk
+    return chunks.map((chunk, chunkIndex) => {
+      // Filename: voeg part nummer toe als er meerdere chunks zijn
+      let filename = baseFilename;
+      if (chunks.length > 1) {
+        // Verwijder .md extensie, voeg part nummer toe, voeg extensie weer toe
+        const ext = filename.endsWith('.md') ? '.md' : '';
+        const base = ext ? filename.slice(0, -3) : filename;
+        filename = `${base}_part${chunkIndex + 1}${ext}`;
+      }
+
+      const header = s.includeMetadata ? [
+        '---',
+        `scan_date: ${date.toISOString()}`,
+        `scan_source: ${state.currentImage?.filename || ''}`,
+        `books_detected: ${chunk.length}`,
+        `books_total: ${state.books.length}`,
+        chunks.length > 1 ? `part: ${chunkIndex + 1} of ${chunks.length}` : null,
+        `lookup_source: ${s.lookupSource}`,
+        `scanner_version: 1.0.0`,
+        '---',
+        ''
+      ].filter(line => line !== null).join('\n') : '';
+
+      const booksContent = chunk.map(bookToMarkdown).join('\n\n');
+
+      return { filename, content: header + booksContent };
+    });
   }
 }
 
@@ -2333,14 +2573,14 @@ function copyToClipboard() {
 
 let toastTimeout = null;
 
-function showToast(message) {
+function showToast(message, duration = 3000) {
   elements.toast.textContent = message;
   elements.toast.classList.add('show');
 
   if (toastTimeout) clearTimeout(toastTimeout);
   toastTimeout = setTimeout(() => {
     elements.toast.classList.remove('show');
-  }, 3000);
+  }, duration);
 }
 
 // ============================================================================
@@ -2410,13 +2650,39 @@ function initEventListeners() {
   elements.btnNewScan.addEventListener('click', () => {
     state.books = [];
     state.currentImage = null;
+    state.shelfTags = '';  // Reset tags voor nieuwe scan
+    const tagsInput = document.getElementById('shelf-tags');
+    if (tagsInput) tagsInput.value = '';
     showScreen('main');
   });
 
-  // Export
-  elements.btnExport.addEventListener('click', downloadMarkdown);
+  // Tags input - update state en sla op bij blur (verlaten veld)
+  const tagsInput = document.getElementById('shelf-tags');
+  if (tagsInput) {
+    tagsInput.addEventListener('input', (e) => {
+      state.shelfTags = e.target.value;
+    });
+    // Sla tags op in historie zodra gebruiker het veld verlaat
+    // Zo zijn ze direct beschikbaar als suggestie bij de volgende scan
+    tagsInput.addEventListener('blur', (e) => {
+      if (e.target.value.trim()) {
+        addTagsToHistory(e.target.value);
+      }
+    });
+  }
+
+  // Export - save tags to history before export
+  elements.btnExport.addEventListener('click', () => {
+    addTagsToHistory(state.shelfTags);
+    downloadMarkdown();
+  });
   const btnZip = document.getElementById('btn-export-zip');
-  if (btnZip) btnZip.addEventListener('click', downloadMarkdownAsZip);
+  if (btnZip) {
+    btnZip.addEventListener('click', () => {
+      addTagsToHistory(state.shelfTags);
+      downloadMarkdownAsZip();
+    });
+  }
   elements.btnCopy.addEventListener('click', copyToClipboard);
 
   // Settings changes

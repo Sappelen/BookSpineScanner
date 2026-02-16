@@ -42,9 +42,9 @@ TOBETESTED: Cancel button to abort processing
 USER INTERFACE - RESULTS SCREEN
 -------------------------------
 TESTEDBYUSER: Split view: original image (left/top) and book list (right/bottom)
-TESTEDBYUSER: To get the same look and feel as the Libiry app, use fields Background color and Background font color from BookSpineScanner's own customize.txt file, as described in file C:\Claudeproject\BookSpineScanner\resources\settings_defaults.txt
-TESTEDBYUSER: To get the same look and feel as the Libiry app, use field Rounded corners y/n from BookSpineScanner's own customize.txt file, as described in file C:\Claudeproject\BookSpineScanner\resources\settings_defaults.txt. Make the rounded courners of all of the screen elements straight when the field value does not equal Y or y. See example "Still rounded corners.png"
-TESTEDBYUSER: bovenin het  scherm staat de tekst "Libiry BookSpineScanner"
+TESTEDBYUSER: Use fields Background color and Background font color from BookSpineScanner's own customize.txt file, as described in file C:\Claudeproject\BookSpineScanner\resources\settings_defaults.txt
+TESTEDBYUSER: Use field Rounded corners y/n from BookSpineScanner's own customize.txt file, as described in file C:\Claudeproject\BookSpineScanner\resources\settings_defaults.txt. Make the rounded courners of all of the screen elements straight when the field value does not equal Y or y. See example "Still rounded corners.png"
+TESTEDBYUSER: Bovenin het scherm staat de tekst "Libiry BookSpineScanner"
 TESTEDBYUSER: app.ico uit folder resources wordt getoond als favicon in de browserbalk (desktop), als app-logo op het telefoonscherm en bovenin uiterst links in het scherm, direct voor de tekst "Libiry BookSpineScanner"
 TESTEDBYUSER: Book list shows all detected books with status indicators
 TESTEDBYUSER: Status indicators: green checkmark (high confidence), yellow warning (needs review), red X (not found)
@@ -68,6 +68,7 @@ TESTEDBYUSER: User edits are preserved when switching between books
 
 SETTINGS SCREEN
 ---------------
+TOBEBUILT: The first field is export location. If filled in and valid, it overrides the default export location.
 TESTEDBYUSER: Lookup source: dropdown with "Open Library (default)", "Google Books", "Both (Open Library first)"
 TESTEDBYUSER: Default export filename pattern: text field, default "shelf_[DATE]_[TIME].md"
 TESTEDBYUSER: Language preference for OCR: dropdown (Dutch, English, German, French, Spanish, Auto-detect)
@@ -82,8 +83,19 @@ TESTEDBYUSER: Field name booktitle: default "booktitle", user can specify altern
 TESTEDBYUSER: Field name author: default "author", user can specify alternative (e.g. "auteur", "writer")
 TESTEDBYUSER: Field name isbn_analog: default "isbn_analog", user can specify alternative (e.g. "isbn_physical", "isbn_print")
 TESTEDBYUSER: Field name isbn_digital: default "isbn_digital", user can specify alternative (e.g. "isbn_ebook", "eisbn")
+TOBETESTED: Field name tags: default "tags", user can specify alternative (e.g. "bookshelves", "categories") - Goodreads compatible
 TESTEDBYUSER: Settings are stored in localStorage and used when generating export files
 TESTEDBYUSER: Export uses configured field names so output matches user's existing Obsidian/Libiry setup
+
+SHELF TAGS (LOCATIE MARKERING)
+------------------------------
+TOBETESTED: Tags invoerveld in de action bar van het results screen, voor de export knoppen
+TOBETESTED: Gebruiker kan per shelf/scan tags invoeren (bv. "bovensteplank", "wishlist", "slaapkamer")
+TOBETESTED: Tags worden komma-gescheiden opgegeven en gelden voor alle boeken in de huidige scan
+TOBETESTED: Autocomplete suggesties: eerder ingevoerde tags worden opgeslagen in localStorage (max 50)
+TOBETESTED: Bij typen worden eerder gebruikte tags als suggesties getoond (via HTML5 datalist)
+TOBETESTED: Tags worden meegenomen in de export in Goodreads volgorde (na isbn_digital)
+TOBETESTED: Bij "New Scan" wordt het tags invoerveld geleegd
 
 IMAGE PROCESSING PIPELINE
 -------------------------
@@ -165,6 +177,7 @@ TESTEDBYUSER: Book entry structure (repeats for each book):
   author: [author name]
   isbn_analog: [physical book ISBN]
   isbn_digital: [ebook ISBN if available]
+TOBETESTED:  tags: [user-entered shelf tags, comma-separated, e.g. "bovensteplank, fictie"]
   scan_confidence: [high|medium|none]
   scan_candidates: [pipe-separated alternatives, only if medium confidence]
   scan_raw_ocr: [original OCR text, only if none confidence]
@@ -183,6 +196,7 @@ TESTEDBYUSER: File structure:
   author: "[author name]"
   isbn_analog: "[physical book ISBN]"
   isbn_digital: "[ebook ISBN if available]"
+  tags: "[user-entered shelf tags]"
   scan_confidence: [high|medium|none]
   scan_source: "[original photo filename]"
   scan_date: [ISO date]
@@ -191,6 +205,22 @@ TESTEDBYUSER: File structure:
   # [booktitle]
 
   [Empty space for user notes]
+
+
+ TOBETESTED: API functies uitgebreid. Alle drie de lookup APIs halen nu extra metadata op:
+  ┌─────────────┬─────────────────────┬─────────────────────────┬────────────────────────┐
+  │    Veld     │    Open Library     │      Google Books       │       Europeana        │
+  ├─────────────┼─────────────────────┼─────────────────────────┼────────────────────────┤
+  │ publisher   │ doc.publisher[0]    │ info.publisher          │ item.dcPublisher[0]    │
+  ├─────────────┼─────────────────────┼─────────────────────────┼────────────────────────┤
+  │ year        │ doc.publish_year[0] │ info.publishedDate      │ item.year[0] of dcDate │
+  ├─────────────┼─────────────────────┼─────────────────────────┼────────────────────────┤
+  │ language    │ doc.language[0]     │ info.language           │ item.dcLanguage[0]     │
+  ├─────────────┼─────────────────────┼─────────────────────────┼────────────────────────┤
+  │ description │ doc.first_sentence  │ info.description        │ item.dcDescription[0]  │
+  ├─────────────┼─────────────────────┼─────────────────────────┼────────────────────────┤
+  │ subjects    │ doc.subject (max 5) │ info.categories (max 5) │ item.dcSubject (max 5) │
+  └─────────────┴─────────────────────┴─────────────────────────┴────────────────────────┘
 
 EXPORT OPTIONS
 --------------
@@ -247,6 +277,7 @@ TESTEDBYUSER: Users can also manually create .md files or use their existing fil
 TESTEDBYUSER: Libiry reads: cover, booktitle, author, isbn_analog, isbn_digital (or configured alternatives)
 TESTEDBYUSER: Libiry ignores: scan_confidence, scan_candidates, scan_raw_ocr, unknown YAML fields
 TESTEDBYUSER: Libiry supports both YAML frontmatter and flat key: value format
+TESTEDBYUSER: Libiry limiet: max 100 boeken per markdown file (voor performance bij duplicate detection). Bij meer dan 100 boeken wordt de export automatisch gesplitst in meerdere bestanden (shelf_part1.md, shelf_part2.md, etc.). Elke file bevat in de YAML header: books_detected (aantal in dit bestand), books_total (totaal aantal), en part (X of Y).
 TESTEDBYUSER: User workflow: Scan -> Review -> Export -> Place .md in Libiry folder -> Refresh Libiry
 
 USER EXPERIENCE & ONBOARDING
@@ -255,7 +286,7 @@ TESTEDBYUSER: API Key Onboarding - Default to Tesseract (works without setup), s
 TESTEDBYUSER: Settings page shows step-by-step instructions for getting Google Vision API key
 TESTEDBYUSER: Cost info shown in settings (1000 scans/month free, then ~$1.50/1000)
 
-TOBETESTED: PWA Installation - Smooth user experience. How does the user know they can install the app?
+TESTEDBYUSER: PWA Installation - Smooth user experience. How does the user know they can install the app?
   - Browser sometimes shows "Add to Home Screen" banner automatically
   - Custom install button shown when browser supports it
   - After install: splash screen with app icon

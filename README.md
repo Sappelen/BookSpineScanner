@@ -128,5 +128,7 @@ If your existing Obsidian or Libiry setup uses different field names, you can co
 4. Place the '.md' file(s) in your Libiry book folder
 5. Refresh Libiry
 
-Libiry reads the fields 'cover', 'booktitle', 'author', 'isbn_analog', and 'isbn_digital' from the markdown files. 
+Libiry reads the fields 'cover', 'booktitle', 'author', 'isbn_analog', and 'isbn_digital' from the markdown files.
 All other fields are ignored by Libiry but preserved in the file.
+
+**Note:** Libiry supports a maximum of 100 books per markdown file for performance reasons. If a scan contains more than 100 books, BookSpineScanner automatically splits the export into multiple files (`shelf_part1.md`, `shelf_part2.md`, etc.).

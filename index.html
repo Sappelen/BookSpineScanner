@@ -155,6 +155,17 @@
           </svg>
           New Scan
         </button>
+
+        <!-- Tags input with autocomplete -->
+        <div class="tags-input-container">
+          <label for="shelf-tags" class="tags-label">Tags:</label>
+          <input type="text" id="shelf-tags" class="tags-input"
+                 placeholder="e.g. bovensteplank, wishlist"
+                 list="tags-suggestions"
+                 autocomplete="off">
+          <datalist id="tags-suggestions"></datalist>
+        </div>
+
         <button id="btn-copy" class="btn btn-secondary">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -321,11 +332,11 @@
               <label for="field-author">Author:</label>
               <input type="text" id="field-author" class="setting-input-small" placeholder="author">
 
-              <label for="field-isbn-analog">ISBN Print:</label>
-              <input type="text" id="field-isbn-analog" class="setting-input-small" placeholder="isbn_analog">
+              <label for="field-isbn-analog">ISBN:</label>
+              <input type="text" id="field-isbn-analog" class="setting-input-small" placeholder="isbn">
 
-              <label for="field-isbn-digital">ISBN Digital:</label>
-              <input type="text" id="field-isbn-digital" class="setting-input-small" placeholder="isbn_digital">
+              <label for="field-tags">Tags:</label>
+              <input type="text" id="field-tags" class="setting-input-small" placeholder="tags">
             </div>
           </div>
 

@@ -666,6 +666,50 @@ body {
   }
 }
 
+/* Tags Input in Action Bar */
+.tags-input-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  flex: 1;
+  max-width: 300px;
+  min-width: 150px;
+}
+
+.tags-label {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.tags-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 0.875rem;
+  outline: none;
+  min-width: 80px;
+}
+
+.tags-input::placeholder {
+  color: var(--color-text-secondary);
+  opacity: 0.6;
+}
+
+@media (max-width: 500px) {
+  .tags-input-container {
+    order: -1;
+    width: 100%;
+    max-width: none;
+    margin-bottom: 8px;
+  }
+}
+
 /* Settings Screen */
 .settings-container {
   max-width: 600px;
