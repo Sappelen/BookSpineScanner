@@ -116,6 +116,16 @@ function loadSettings() {
     if (saved) {
       const parsed = JSON.parse(saved);
       Object.assign(state.settings, parsed);
+
+      // Migrate old isbn_analog/isbn_digital to single isbn field
+      if (state.settings.fieldNames) {
+        if (state.settings.fieldNames.isbn_analog !== undefined && state.settings.fieldNames.isbn === undefined) {
+          state.settings.fieldNames.isbn = state.settings.fieldNames.isbn_analog;
+          delete state.settings.fieldNames.isbn_analog;
+          delete state.settings.fieldNames.isbn_digital;
+          saveSettings(); // Persist migration
+        }
+      }
     } else {
       // No saved settings (new user): follow system dark mode preference
       state.settings.darkMode = window.matchMedia?.('(prefers-color-scheme: dark)').matches || false;
