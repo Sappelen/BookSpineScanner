@@ -22,12 +22,16 @@ TESTEDBYUSER: Clean, minimal interface with single primary action
 TESTEDBYUSER: Mobile view: large "Take Photo" button with camera icon
 TESTEDBYUSER: Desktop view: drag-and-drop zone + "Select File" button
 TESTEDBYUSER: Below input area: list of recent scans (stored in localStorage)
-TESTEDBYUSER: For the settings icon (gear) in the top right corner, use gear icon gear.png when one exists in BookSpineScanner's own customize folder.
-TOBETESTED: If no gear.png is found in folder customizing, use gear.png from folder resources
-TOBETESTED: For the information icon in the top right corner, use icon information.png when one exists in BookSpineScanner's own customize folder.
-TOBETESTED: If no information.png is found in folder customizing, use information.png from folder resources
-TOBETESTED: Pressing the information icon shows document README.md
-
+TOBETESTED: For the settings icon (gear) in the top right corner, use gear icon gear.png when one exists in BookSpineScanner's folder customize/icons.
+TOBETESTED: If no gear.png is found in folder customize/icons, use gear.png from folder resources/icons
+TOBETESTED: For the information icon right next to gear.png, use icon information.png when one exists in BookSpineScanner's folder customize/icons.
+TOBETESTED: If no information.png is found in folder customize/icons, use information.png from folder resources/icons
+TESTEDBYUSER: Pressing the information icon shows https://libiry.org/
+TOBETESTED: For the support icon in the top right corner, use icon support.png when one exists in BookSpineScanner's folder customize/icons.
+TOBETESTED: If no support.png is found in folder customize/icons, use support.png from folder resources/icons
+TOBETESTED: Pressing the support icon shows https://sappelen.com/en/support-2/
+TOBETESTED: The distance between the buttons is exactly the same as in the Libiry app (and has a smaller distance between the i and other icons)
+TOBETESTED: For all icons, use the icons from folder iconsdarkmode instead of from folder icons if dark mode is detected
 TESTEDBYUSER: The look currently in customizing/customize.txt (background colour, font colour, rounded corners set to N) will be the default look for new users
 
 USER INTERFACE - PROCESSING SCREEN
@@ -47,8 +51,9 @@ TESTEDBYUSER: Use field Rounded corners y/n from BookSpineScanner's own customiz
 TESTEDBYUSER: Bovenin het scherm staat de tekst "Libiry BookSpineScanner"
 TESTEDBYUSER: app.ico uit folder resources wordt getoond als favicon in de browserbalk (desktop), als app-logo op het telefoonscherm en bovenin uiterst links in het scherm, direct voor de tekst "Libiry BookSpineScanner"
 TESTEDBYUSER: Book list shows all detected books with status indicators
-TESTEDBYUSER: Status indicators: green checkmark (high confidence), yellow warning (needs review), red X (not found)
-TESTEDBYUSER: User can move the checkmarks to red or green (click on status dot to cycle: none->medium->high->none)
+TOBETESTED: Status indicators: green checkmark (high confidence), yellow triangle (needs review), red X (not found)
+DELETED: Status indicators: green dot (high confidence), yellow dot (needs review), red dot (not found) ->this does not work for colorblind people
+TESTEDBYUSER: User can move the checkmarks to red or green (click on status indicator to cycle: none->medium->high->none)
 TESTEDBYUSER: For lines marked as red, the preliminary book title is shown in the list view, for orange and green: the book title is shown in the list view
 TESTEDBYUSER: Each book entry is expandable to show full details and edit fields
 TESTEDBYUSER: (at least all the) red lines also show a field "preliminary" booktitle where the text is filled in without any guessing as to what book it is
@@ -68,7 +73,7 @@ TESTEDBYUSER: User edits are preserved when switching between books
 
 SETTINGS SCREEN
 ---------------
-TOBEBUILT: The first field is export location. If filled in and valid, it overrides the default export location.
+TOBEBUILTNICETOHAVE: The first field is export location. If filled in and valid, it overrides the default export location.
 TESTEDBYUSER: Lookup source: dropdown with "Open Library (default)", "Google Books", "Both (Open Library first)"
 TESTEDBYUSER: Default export filename pattern: text field, default "shelf_[DATE]_[TIME].md"
 TESTEDBYUSER: Language preference for OCR: dropdown (Dutch, English, German, French, Spanish, Auto-detect)
@@ -136,10 +141,29 @@ TESTEDBYUSER: industryIdentifiers contains ISBN_10 and ISBN_13
 TESTEDBYUSER: API key recommended for higher quota (works without for low volume)
 TESTEDBYUSER: Setting to enter personal API key (stored in localStorage)
 
-TOBEBUILT:  De Europeana API wordt ook uitgevraagd in de BookSpineScanner (na Open Library en Google Books)
+TOBETESTED: De Europeana API wordt ook uitgevraagd in de BookSpineScanner (na Open Library en Google Books)
+
+BOOK LOOKUP - LIBRARY OF CONGRESS
+----------------------------------
+TOBETESTED: Library of Congress SRU API toegevoegd voor academische en historische werken
+TOBETESTED: Endpoint: https://lx2.loc.gov/sru/lcdb met Dublin Core schema
+TOBETESTED: Zoeken op ISBN (bath.isbn) en titel/auteur (dc.title, dc.creator)
+TOBETESTED: Geen API key vereist
+TOBETESTED: Let op: LoC levert geen cover images - gebruik andere bronnen voor covers
+TOBETESTED: Extra veld: LCCN (Library of Congress Control Number) wordt meegenomen
+TOBETESTED: Selecteerbaar in settings als "Library of Congress only" of via "All sources"
 
 BOOK LOOKUP - WORLDCAT
 
+
+BOOK LOOKUP - BESTE MATCH SELECTIE
+----------------------------------
+TOBETESTED: Bij meerdere bronnen (bijv. "both" of "all") worden ALLE bronnen bevraagd
+TOBETESTED: De match met de hoogste similarity score wint (niet de eerste die iets vindt)
+TOBETESTED: Bij gelijke score: voorkeur voor resultaat met cover image
+TOBETESTED: Candidates van alle bronnen worden gecombineerd (duplicaten verwijderd)
+TOBETESTED: In export wordt getoond welke API de beste match leverde (scan_source_api)
+TOBETESTED: In export wordt de confidence score als percentage getoond, bijv. "high (87%)"
 
 CONFIDENCE SCORING
 ------------------
@@ -150,38 +174,39 @@ TESTEDBYUSER: Display confidence score as percentage in detailed view
 
 OUTPUT FORMAT - EXPORT OPTIONS
 ------------------------------
-TESTEDBYUSER: Export format dropdown with two presets:
-TESTEDBYUSER: - "Libiry format": flat key: value lines, multiple books per file, minimal YAML header
-TESTEDBYUSER: - "Obsidian format": YAML frontmatter, one book per file, all fields in frontmatter
-TESTEDBYUSER: Checkbox "Create separate file per book" (default OFF for Libiry, ON for Obsidian preset)
+DELETED: Export format dropdown with two presets:
+DELETED: - "Libiry format": flat key: value lines, multiple books per file, minimal YAML header
+DELETED: - "Obsidian format": YAML frontmatter, one book per file, all fields in frontmatter
+DELETED: Checkbox "Create separate file per book" (default OFF for Libiry, ON for Obsidian preset)
+TOBETESTED: Export is altijd 1 bestand per boek (Obsidian compatible format)
 
-OUTPUT FORMAT - LIBIRY FORMAT (MULTIPLE BOOKS PER FILE)
--------------------------------------------------------
-TESTEDBUUSER: One .md file per scan (per bookshelf photo)
-TESTEDBYUSER: YAML frontmatter with scan metadata only
-TESTEDBYUSER: Each book as a block with flat key: value lines
-TESTEDBYUSER: Additional scanner fields that Libiry ignores but user can review
-
-TESTEDBYUSER: YAML frontmatter structure:
-  ---
-  scan_date: [ISO date]
-  scan_source: [original filename]
-  books_detected: [count]
-  lookup_source: [openlibrary|googlebooks|both]
-  scanner_version: [version number]
-  ---
-
-TESTEDBYUSER: Book entry structure (repeats for each book):
-  cover: [URL or empty]
-  booktitle: [title]
-  author: [author name]
-  isbn_analog: [physical book ISBN]
-  isbn_digital: [ebook ISBN if available]
-TOBETESTED:  tags: [user-entered shelf tags, comma-separated, e.g. "bovensteplank, fictie"]
-  scan_confidence: [high|medium|none]
-  scan_candidates: [pipe-separated alternatives, only if medium confidence]
-  scan_raw_ocr: [original OCR text, only if none confidence]
-  [blank line separator]
+DELETED: OUTPUT FORMAT - LIBIRY FORMAT (MULTIPLE BOOKS PER FILE)
+DELETED: -------------------------------------------------------
+DELETED: One .md file per scan (per bookshelf photo)
+DELETED: YAML frontmatter with scan metadata only
+DELETED: Each book as a block with flat key: value lines
+DELETED: Additional scanner fields that Libiry ignores but user can review
+DELETED:
+DELETED: YAML frontmatter structure:
+DELETED:   ---
+DELETED:   scan_date: [ISO date]
+DELETED:   scan_source: [original filename]
+DELETED:   books_detected: [count]
+DELETED:   lookup_source: [openlibrary|googlebooks|both]
+DELETED:   scanner_version: [version number]
+DELETED:   ---
+DELETED:
+DELETED: Book entry structure (repeats for each book):
+DELETED:   cover: [URL or empty]
+DELETED:   booktitle: [title]
+DELETED:   author: [author name]
+DELETED:   isbn_analog: [physical book ISBN]
+DELETED:   isbn_digital: [ebook ISBN if available]
+DELETED:   tags: [user-entered shelf tags, comma-separated, e.g. "bovensteplank, fictie"]
+DELETED:   scan_confidence: [high|medium|none]
+DELETED:   scan_candidates: [pipe-separated alternatives, only if medium confidence]
+DELETED:   scan_raw_ocr: [original OCR text, only if none confidence]
+DELETED:   [blank line separator]
 
 OUTPUT FORMAT - OBSIDIAN FORMAT (ONE BOOK PER FILE)
 ---------------------------------------------------
@@ -207,20 +232,24 @@ TESTEDBYUSER: File structure:
   [Empty space for user notes]
 
 
- TOBETESTED: API functies uitgebreid. Alle drie de lookup APIs halen nu extra metadata op:
-  ┌─────────────┬─────────────────────┬─────────────────────────┬────────────────────────┐
-  │    Veld     │    Open Library     │      Google Books       │       Europeana        │
-  ├─────────────┼─────────────────────┼─────────────────────────┼────────────────────────┤
-  │ publisher   │ doc.publisher[0]    │ info.publisher          │ item.dcPublisher[0]    │
-  ├─────────────┼─────────────────────┼─────────────────────────┼────────────────────────┤
-  │ year        │ doc.publish_year[0] │ info.publishedDate      │ item.year[0] of dcDate │
-  ├─────────────┼─────────────────────┼─────────────────────────┼────────────────────────┤
-  │ language    │ doc.language[0]     │ info.language           │ item.dcLanguage[0]     │
-  ├─────────────┼─────────────────────┼─────────────────────────┼────────────────────────┤
-  │ description │ doc.first_sentence  │ info.description        │ item.dcDescription[0]  │
-  ├─────────────┼─────────────────────┼─────────────────────────┼────────────────────────┤
-  │ subjects    │ doc.subject (max 5) │ info.categories (max 5) │ item.dcSubject (max 5) │
-  └─────────────┴─────────────────────┴─────────────────────────┴────────────────────────┘
+ TOBETESTED: API functies uitgebreid. Alle vier de lookup APIs halen nu extra metadata op:
+  ┌─────────────┬─────────────────────┬─────────────────────────┬────────────────────────┬────────────────────────┐
+  │    Veld     │    Open Library     │      Google Books       │       Europeana        │  Library of Congress   │
+  ├─────────────┼─────────────────────┼─────────────────────────┼────────────────────────┼────────────────────────┤
+  │ publisher   │ doc.publisher[0]    │ info.publisher          │ item.dcPublisher[0]    │ dc:publisher           │
+  ├─────────────┼─────────────────────┼─────────────────────────┼────────────────────────┼────────────────────────┤
+  │ year        │ doc.publish_year[0] │ info.publishedDate      │ item.year[0] of dcDate │ dc:date                │
+  ├─────────────┼─────────────────────┼─────────────────────────┼────────────────────────┼────────────────────────┤
+  │ language    │ doc.language[0]     │ info.language           │ item.dcLanguage[0]     │ dc:language            │
+  ├─────────────┼─────────────────────┼─────────────────────────┼────────────────────────┼────────────────────────┤
+  │ description │ doc.first_sentence  │ info.description        │ item.dcDescription[0]  │ dc:description         │
+  ├─────────────┼─────────────────────┼─────────────────────────┼────────────────────────┼────────────────────────┤
+  │ subjects    │ doc.subject (max 5) │ info.categories (max 5) │ item.dcSubject (max 5) │ dc:subject (max 5)     │
+  ├─────────────┼─────────────────────┼─────────────────────────┼────────────────────────┼────────────────────────┤
+  │ cover       │ covers.openlibrary  │ imageLinks.thumbnail    │ edmPreview             │ (niet beschikbaar)     │
+  ├─────────────┼─────────────────────┼─────────────────────────┼────────────────────────┼────────────────────────┤
+  │ extra       │ -                   │ -                       │ europeanaId            │ LCCN                   │
+  └─────────────┴─────────────────────┴─────────────────────────┴────────────────────────┴────────────────────────┘
 
 EXPORT OPTIONS
 --------------
@@ -319,9 +348,8 @@ TOBETESTED: Invalid API key: clear error message + link to docs
 
 Hosting & Distribution
 ----------------------
-TOBETESTED: GitHub Pages
-TOBETESTED: Documentation for end user
-TOBEBUILTNICETOHAVE: Mention in Libiry documentation (not just yet)
+TESTEDBYUSER: GitHub Pages
+TESTEDBYUSER: Documentation for end user
 
 TECHNICAL STACK
 ---------------

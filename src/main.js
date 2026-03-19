@@ -26,7 +26,7 @@ const state = {
     lookupSource: 'openlibrary',
     ocrEngine: 'tesseract',
     language: 'eng+nld',
-    exportFormat: 'libiry',
+    exportFormat: 'obsidian',  // Altijd 1 boek per file (Obsidian compatible)
     filenamePattern: 'shelf_[DATE]_[TIME].md',
     includeMetadata: true,
     includeConfidence: true,
@@ -74,6 +74,8 @@ const elements = {
   btnCamera: $('#btn-camera'),
   btnSelectFile: $('#btn-select-file'),
   btnSettings: $('#btn-settings'),
+  btnInfo: $('#btn-info'),
+  btnSupport: $('#btn-support'),
   btnSettingsBack: $('#btn-settings-back'),
   btnCancel: $('#btn-cancel'),
   btnNewScan: $('#btn-new-scan'),
@@ -208,30 +210,35 @@ function applySettings() {
   document.documentElement.dataset.theme = isDark ? 'dark' : 'light';
 
   // Switch header icons between light and dark variants
-  const gearImg = document.querySelector('.gear-icon');
-  if (gearImg) {
-    gearImg.src = isDark
-      ? `${import.meta.env.BASE_URL}resources/geardarkmode.png`
-      : `${import.meta.env.BASE_URL}customize/gear.png`;
-    gearImg.onerror = function() {
-      this.src = `${import.meta.env.BASE_URL}resources/${isDark ? 'geardarkmode' : 'gear'}.png`;
+  // Volgorde: customize/icons(darkmode) > resources/icons(darkmode) > fallback
+  const base = import.meta.env.BASE_URL;
+  const iconFolder = isDark ? 'iconsdarkmode' : 'icons';
+
+  // Helper functie om icon te laden met fallback chain
+  const setIconWithFallback = (imgId, iconName) => {
+    const img = document.getElementById(imgId);
+    if (!img) return;
+
+    // Probeer eerst customize/icons(darkmode), dan resources/icons(darkmode)
+    img.src = `${base}customize/${iconFolder}/${iconName}.png`;
+    img.onerror = function() {
+      this.src = `${base}resources/${iconFolder}/${iconName}.png`;
+      this.onerror = function() {
+        // Laatste fallback: resources/icons (light mode versie)
+        this.src = `${base}resources/icons/${iconName}.png`;
+        this.onerror = null;
+      };
     };
-  }
-  const infoImg = document.querySelector('.info-icon');
-  if (infoImg) {
-    infoImg.src = isDark
-      ? `${import.meta.env.BASE_URL}resources/informationdarkmode.png`
-      : `${import.meta.env.BASE_URL}customize/information.png`;
-    infoImg.onerror = function() {
-      this.src = `${import.meta.env.BASE_URL}resources/${isDark ? 'informationdarkmode' : 'information'}.png`;
-    };
-  }
+  };
+
+  setIconWithFallback('gear-icon-img', 'gear');
+  setIconWithFallback('info-icon-img', 'information');
+  setIconWithFallback('support-icon-img', 'support');
 
   // Update form fields
   $('#setting-lookup').value = state.settings.lookupSource;
   $('#setting-ocr-engine').value = state.settings.ocrEngine;
   $('#setting-language').value = state.settings.language;
-  $('#setting-format').value = state.settings.exportFormat;
   $('#setting-filename').value = state.settings.filenamePattern;
   $('#setting-metadata').checked = state.settings.includeMetadata;
   $('#setting-confidence').checked = state.settings.includeConfidence;
@@ -268,7 +275,6 @@ function collectSettings() {
   state.settings.lookupSource = $('#setting-lookup').value;
   state.settings.ocrEngine = $('#setting-ocr-engine').value;
   state.settings.language = $('#setting-language').value;
-  state.settings.exportFormat = $('#setting-format').value;
   state.settings.filenamePattern = $('#setting-filename').value;
   state.settings.includeMetadata = $('#setting-metadata').checked;
   state.settings.includeConfidence = $('#setting-confidence').checked;
@@ -1378,42 +1384,100 @@ async function lookupBooks(parsedBooks) {
   for (const parsed of parsedBooks) {
     const searchQuery = parsed.possibleTitle || parsed.rawText;
 
-    let bookData = null;
-    let confidence = 'none';
-    let candidates = [];
+    // Verzamel resultaten van ALLE bronnen en kies de beste match
+    // Oude aanpak: eerste bron die iets vindt wint (kon slechte match van bron A
+    // kiezen terwijl bron B een betere match had)
+    // Nieuwe aanpak: alle bronnen bevragen, beste similarity score wint
+    let allResults = [];
 
     try {
-      if (state.settings.lookupSource === 'openlibrary' || state.settings.lookupSource === 'both') {
+      // Open Library lookup
+      if (state.settings.lookupSource === 'openlibrary' || state.settings.lookupSource === 'both' || state.settings.lookupSource === 'all') {
         const olResult = await searchOpenLibrary(searchQuery);
-        if (olResult) {
-          bookData = olResult.best;
-          candidates = olResult.candidates;
-          confidence = calculateConfidence(searchQuery, bookData);
+        if (olResult && olResult.best) {
+          const score = calculateConfidenceScore(searchQuery, olResult.best);
+          allResults.push({
+            source: 'openlibrary',
+            bookData: olResult.best,
+            candidates: olResult.candidates,
+            score: score
+          });
         }
       }
 
-      if (!bookData && (state.settings.lookupSource === 'googlebooks' || state.settings.lookupSource === 'both')) {
+      // Google Books lookup
+      if (state.settings.lookupSource === 'googlebooks' || state.settings.lookupSource === 'both' || state.settings.lookupSource === 'all') {
         const gbResult = await searchGoogleBooks(searchQuery);
-        if (gbResult) {
-          bookData = gbResult.best;
-          candidates = gbResult.candidates;
-          confidence = calculateConfidence(searchQuery, bookData);
+        if (gbResult && gbResult.best) {
+          const score = calculateConfidenceScore(searchQuery, gbResult.best);
+          allResults.push({
+            source: 'googlebooks',
+            bookData: gbResult.best,
+            candidates: gbResult.candidates,
+            score: score
+          });
         }
       }
 
-      // Europeana lookup: als 'europeana' of 'all' is geselecteerd en nog geen resultaat
-      // Europeana is vooral sterk in historische en Europese werken
-      if (!bookData && (state.settings.lookupSource === 'europeana' || state.settings.lookupSource === 'all')) {
+      // Europeana lookup
+      if (state.settings.lookupSource === 'europeana' || state.settings.lookupSource === 'all') {
         const euResult = await searchEuropeana(searchQuery);
-        if (euResult) {
-          bookData = euResult.best;
-          candidates = euResult.candidates;
-          confidence = calculateConfidence(searchQuery, bookData);
+        if (euResult && euResult.best) {
+          const score = calculateConfidenceScore(searchQuery, euResult.best);
+          allResults.push({
+            source: 'europeana',
+            bookData: euResult.best,
+            candidates: euResult.candidates,
+            score: score
+          });
+        }
+      }
+
+      // Library of Congress lookup
+      if (state.settings.lookupSource === 'loc' || state.settings.lookupSource === 'all') {
+        const locResult = await searchLibraryOfCongress(searchQuery);
+        if (locResult && locResult.best) {
+          const score = calculateConfidenceScore(searchQuery, locResult.best);
+          allResults.push({
+            source: 'loc',
+            bookData: locResult.best,
+            candidates: locResult.candidates,
+            score: score
+          });
         }
       }
     } catch (error) {
       console.error('Lookup error for:', searchQuery, error);
     }
+
+    // Kies de beste match: hoogste similarity score wint
+    // Bij gelijke score: voorkeur voor bronnen met cover image
+    let bestResult = null;
+    if (allResults.length > 0) {
+      allResults.sort((a, b) => {
+        // Primair: hoogste score wint
+        if (b.score !== a.score) return b.score - a.score;
+        // Secundair: voorkeur voor resultaat met cover
+        const aHasCover = a.bookData.cover ? 1 : 0;
+        const bHasCover = b.bookData.cover ? 1 : 0;
+        return bHasCover - aHasCover;
+      });
+      bestResult = allResults[0];
+    }
+
+    // Combineer candidates van alle bronnen (voor dropdown bij medium confidence)
+    const allCandidates = allResults.flatMap(r => r.candidates || []);
+    // Verwijder duplicaten op basis van titel+auteur
+    const uniqueCandidates = allCandidates.filter((candidate, index, self) =>
+      index === self.findIndex(c =>
+        c.title?.toLowerCase() === candidate.title?.toLowerCase() &&
+        c.author?.toLowerCase() === candidate.author?.toLowerCase()
+      )
+    );
+
+    const bookData = bestResult?.bookData || null;
+    const confidenceScore = bestResult?.score || 0;
+    const confidence = scoreToConfidence(confidenceScore);
 
     // Extra metadata velden in Goodreads volgorde
     results.push({
@@ -1431,7 +1495,9 @@ async function lookupBooks(parsedBooks) {
       description: bookData?.description || '',
       subjects: bookData?.subjects || '',  // API subjects (los van user-entered shelf tags)
       confidence: confidence,
-      candidates: candidates,
+      confidenceScore: confidenceScore,  // Numerieke score (0-1) voor export als percentage
+      confidenceSource: bestResult?.source || '',  // Welke bron de beste match leverde
+      candidates: uniqueCandidates,
       spineRegion: null // TODO: Add when spine detection is implemented
     });
   }
@@ -1682,6 +1748,165 @@ async function searchEuropeana(query) {
   }
 }
 
+/**
+ * Search Library of Congress SRU API for book metadata
+ * Strong for academic works, historical publications, and authoritative bibliographic data
+ * API docs: https://www.loc.gov/apis/additional-apis/search-retrieval-via-url/
+ *
+ * Note: LoC returns XML (Dublin Core), not JSON, and does not provide cover images.
+ *
+ * @param {string} query - Search query (title, author, ISBN, or combined)
+ * @returns {Object|null} - { best, candidates } or null if not found
+ */
+async function searchLibraryOfCongress(query) {
+  try {
+    // Check cache first
+    const cached = await getCachedLookup('loc', query);
+    if (cached) return cached;
+
+    // SRU endpoint met Dublin Core schema (eenvoudiger te parsen dan MARCXML)
+    // CQL query: zoek in alle velden met de query
+    // bath.isbn voor ISBN zoekopdrachten, anders dc.title of algemeen
+    let cqlQuery;
+    const cleanQuery = query.replace(/[-\s]/g, '');
+
+    // Check of het een ISBN is (10 of 13 cijfers)
+    if (/^(\d{10}|\d{13}|97[89]\d{10})$/.test(cleanQuery)) {
+      cqlQuery = `bath.isbn="${cleanQuery}"`;
+    } else {
+      // Algemene zoekopdracht - escape speciale CQL karakters
+      const escapedQuery = query.replace(/"/g, '\\"');
+      cqlQuery = `dc.title="${escapedQuery}" or dc.creator="${escapedQuery}"`;
+    }
+
+    const url = `https://lx2.loc.gov/sru/lcdb?version=1.1&operation=searchRetrieve&query=${encodeURIComponent(cqlQuery)}&recordSchema=dc&maximumRecords=5`;
+
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      console.error('Library of Congress API error:', response.status, response.statusText);
+      return null;
+    }
+
+    const xmlText = await response.text();
+
+    // Parse XML response
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+
+    // Check voor parse errors
+    const parseError = xmlDoc.querySelector('parsererror');
+    if (parseError) {
+      console.error('LoC XML parse error:', parseError.textContent);
+      return null;
+    }
+
+    // Zoek Dublin Core records in de response
+    // SRU response structuur: searchRetrieveResponse > records > record > recordData > dc
+    const records = xmlDoc.querySelectorAll('record');
+
+    if (!records || records.length === 0) return null;
+
+    const candidates = [];
+
+    for (const record of records) {
+      // Dublin Core velden extraheren
+      // Namespace kan variëren, dus we zoeken case-insensitief
+      const getField = (fieldName) => {
+        // Probeer met en zonder namespace prefix
+        const el = record.querySelector(`dc\\:${fieldName}, ${fieldName}`);
+        return el ? el.textContent.trim() : '';
+      };
+
+      const getAllFields = (fieldName) => {
+        const els = record.querySelectorAll(`dc\\:${fieldName}, ${fieldName}`);
+        return Array.from(els).map(el => el.textContent.trim()).filter(Boolean);
+      };
+
+      const title = getField('title');
+      const creator = getField('creator');
+      const publisher = getField('publisher');
+      const date = getField('date');
+      const language = getField('language');
+      const description = getField('description');
+      const subjects = getAllFields('subject');
+      const identifiers = getAllFields('identifier');
+
+      // ISBN uit identifiers halen
+      let isbn = '';
+      for (const id of identifiers) {
+        // Zoek naar ISBN patroon
+        const isbnMatch = id.match(/(?:ISBN[:\s]*)?(\d{10}|\d{13}|97[89][\d-]{10,14})/i);
+        if (isbnMatch) {
+          isbn = isbnMatch[1].replace(/[-\s]/g, '');
+          break;
+        }
+      }
+
+      // LCCN (Library of Congress Control Number) uit identifiers
+      let lccn = '';
+      for (const id of identifiers) {
+        if (id.toLowerCase().includes('lccn') || /^\d{8,10}$/.test(id)) {
+          lccn = id.replace(/[^\d]/g, '');
+          break;
+        }
+      }
+
+      // Jaar uit date extraheren
+      let year = '';
+      if (date) {
+        const yearMatch = date.match(/\d{4}/);
+        if (yearMatch) year = yearMatch[0];
+      }
+
+      if (title) {
+        candidates.push({
+          title: title,
+          author: creator,
+          isbn: isbn,
+          cover: '',  // LoC levert geen cover images
+          publisher: publisher,
+          year: year,
+          language: language,
+          description: description,
+          subjects: subjects.slice(0, 5).join(', '),
+          // Extra LoC-specifieke velden
+          lccn: lccn,
+          source: 'Library of Congress'
+        });
+      }
+    }
+
+    if (candidates.length === 0) return null;
+
+    const result = { best: candidates[0], candidates: candidates };
+    await setCachedLookup('loc', query, result);
+    return result;
+  } catch (error) {
+    console.error('Library of Congress search error:', error);
+    return null;
+  }
+}
+
+// Berekent numerieke confidence score (0-1) voor vergelijking tussen bronnen
+// Gebruikt stringSimilarity om OCR tekst te vergelijken met gevonden titel
+function calculateConfidenceScore(query, bookData) {
+  if (!bookData || !bookData.title) return 0;
+
+  const queryLower = query.toLowerCase();
+  const titleLower = bookData.title.toLowerCase();
+
+  return stringSimilarity(queryLower, titleLower);
+}
+
+// Converteert numerieke score naar categorie voor UI weergave
+function scoreToConfidence(score) {
+  if (score > 0.85) return 'high';
+  if (score > 0.5) return 'medium';
+  return 'none';
+}
+
+// Legacy functie - wordt nog gebruikt op andere plekken
 function calculateConfidence(query, bookData) {
   if (!bookData || !bookData.title) return 'none';
 
@@ -1756,7 +1981,8 @@ function showResults() {
   // Show/hide ZIP button based on export format
   const zipBtn = document.getElementById('btn-export-zip');
   if (zipBtn) {
-    const isMultiFile = state.settings.exportFormat === 'obsidian' && state.books.length > 1;
+    // Altijd 1 bestand per boek, dus multi-file als er meerdere boeken zijn
+    const isMultiFile = state.books.length > 1;
     zipBtn.style.display = isMultiFile ? 'inline-flex' : 'none';
   }
 
@@ -1804,7 +2030,23 @@ function renderBooksList() {
            ondragend="bookDragEnd(event)"
            onclick="toggleBook('${book.id}')">
         <input type="checkbox" class="book-select-cb" onclick="toggleBookSelect('${book.id}', event)" aria-label="Select book">
-        <div class="book-status ${book.confidence}" onclick="event.stopPropagation(); cycleConfidence('${book.id}')" title="Click to cycle: none → medium → high"></div>
+        <div class="book-status ${book.confidence}" onclick="event.stopPropagation(); cycleConfidence('${book.id}')" title="Click to cycle: none → medium → high">
+          ${book.confidence === 'high' ? `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>` : ''}
+          ${book.confidence === 'medium' ? `
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2L1 21h22L12 2zm0 4l7.5 13h-15L12 6z"/>
+              <rect x="11" y="10" width="2" height="5"/>
+              <rect x="11" y="16" width="2" height="2"/>
+            </svg>` : ''}
+          ${book.confidence === 'none' ? `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>` : ''}
+        </div>
         <div class="book-title">${book.confidence === 'none'
           ? (book.preliminaryTitle || book.booktitle || 'Unknown')
           : (book.booktitle || book.preliminaryTitle || 'Unknown')}</div>
@@ -2071,23 +2313,10 @@ window.closePreview = function() {
   if (modal) modal.classList.remove('active');
 };
 
-// Information modal — fetches and renders README.md
-window.showInfo = async function() {
-  const modal = document.getElementById('info-modal');
-  const content = document.getElementById('info-content');
-  if (!modal || !content) return;
-
-  content.innerHTML = '<p>Loading...</p>';
-  modal.classList.add('active');
-
-  try {
-    const response = await fetch(`${import.meta.env.BASE_URL}README.md`);
-    if (!response.ok) throw new Error('Not found');
-    const md = await response.text();
-    content.innerHTML = simpleMarkdownToHtml(md);
-  } catch {
-    content.innerHTML = '<p>Could not load documentation.</p>';
-  }
+// Information button — open Libiry website
+window.showInfo = function() {
+  // Open the Libiry website in a new tab
+  window.open('https://libiry.org/', '_blank');
 };
 
 window.closeInfo = function() {
@@ -2187,151 +2416,56 @@ function generateMarkdown() {
   // Get shelf tags from input (applies to all books in this scan)
   const shelfTags = state.shelfTags || '';
 
-  if (s.exportFormat === 'obsidian') {
-    // One file per book - return array
-    return state.books.map(book => {
-      // For red (none confidence) items: use preliminary title, clear ALL other fields
-      const isRed = book.confidence === 'none';
-      const title = isRed ? (book.preliminaryTitle || book.booktitle || '') : (book.booktitle || '');
-      const author = isRed ? '' : (book.author || '');
-      const isbn_a = isRed ? '' : (book.isbn || '');
-      const cover = isRed ? '' : (book.cover || '');
-      // Extra metadata (leeg bij rode items)
-      const publisher = isRed ? '' : (book.publisher || '');
-      const year = isRed ? '' : (book.year || '');
-      const language = isRed ? '' : (book.language || '');
-      const description = isRed ? '' : (book.description || '');
-      // Combineer API subjects met user shelf tags
-      const apiSubjects = isRed ? '' : (book.subjects || '');
-      const allTags = [shelfTags, apiSubjects].filter(t => t).join(', ');
+  // One file per book (Obsidian compatible format)
+  return state.books.map(book => {
+    // For red (none confidence) items: use preliminary title, clear ALL other fields
+    const isRed = book.confidence === 'none';
+    const title = isRed ? (book.preliminaryTitle || book.booktitle || '') : (book.booktitle || '');
+    const author = isRed ? '' : (book.author || '');
+    const isbn_a = isRed ? '' : (book.isbn || '');
+    const cover = isRed ? '' : (book.cover || '');
+    // Extra metadata (leeg bij rode items)
+    const publisher = isRed ? '' : (book.publisher || '');
+    const year = isRed ? '' : (book.year || '');
+    const language = isRed ? '' : (book.language || '');
+    const description = isRed ? '' : (book.description || '');
+    // Combineer API subjects met user shelf tags
+    const apiSubjects = isRed ? '' : (book.subjects || '');
+    const allTags = [shelfTags, apiSubjects].filter(t => t).join(', ');
 
-      const filenamePattern = s.filenamePattern || '[author] - [booktitle].md';
-      const filename = sanitizeFilename(
-        filenamePattern
-          .replace('[author]', author || 'Unknown')
-          .replace('[booktitle]', title || 'Untitled')
-          .replace('[DATE]', new Date().toISOString().split('T')[0])
-          .replace('[TIME]', new Date().toTimeString().split(' ')[0].replace(/:/g, '-'))
-      );
-      const finalFilename = filename.endsWith('.md') ? filename : filename + '.md';
-      // Volgorde gebaseerd op Goodreads CSV export
-      const content = [
-        '---',
-        `${fieldNames.cover}: "${cover}"`,
-        `${fieldNames.booktitle}: "${title}"`,
-        `${fieldNames.author}: "${author}"`,
-        `${fieldNames.isbn}: "${isbn_a}"`,
-        `${fieldNames.publisher}: "${publisher}"`,
-        `${fieldNames.year}: "${year}"`,
-        `${fieldNames.language}: "${language}"`,
-        `${fieldNames.tags}: "${allTags}"`,
-        s.includeConfidence ? `scan_confidence: ${book.confidence}` : null,
-        s.includeMetadata ? `scan_source: "${state.currentImage?.filename || ''}"` : null,
-        s.includeMetadata ? `scan_date: ${new Date().toISOString()}` : null,
-        '---',
-        '',
-        `# ${title || 'Untitled'}`,
-        '',
-        ''
-      ].filter(line => line !== null).join('\n');
-
-      return { filename: finalFilename, content };
-    });
-  } else {
-    // Libiry format - multiple books per file
-    // Libiry ondersteunt max 100 boeken per file voor performance (O(n²) duplicate detection)
-    // Bij meer dan 100 boeken: automatisch splitsen in meerdere bestanden
-    const MAX_BOOKS_PER_FILE = 100;
-    const date = new Date();
-    const baseFilename = s.filenamePattern
-      .replace('[DATE]', date.toISOString().split('T')[0])
-      .replace('[TIME]', date.toTimeString().split(' ')[0].replace(/:/g, '-'));
-
-    // Helper functie om boek naar markdown content te converteren
+    const filenamePattern = s.filenamePattern || '[author] - [booktitle].md';
+    const filename = sanitizeFilename(
+      filenamePattern
+        .replace('[author]', author || 'Unknown')
+        .replace('[booktitle]', title || 'Untitled')
+        .replace('[DATE]', new Date().toISOString().split('T')[0])
+        .replace('[TIME]', new Date().toTimeString().split(' ')[0].replace(/:/g, '-'))
+    );
+    const finalFilename = filename.endsWith('.md') ? filename : filename + '.md';
     // Volgorde gebaseerd op Goodreads CSV export
-    // Extra velden worden leeggelaten bij rode items (confidence: none)
-    const bookToMarkdown = (book) => {
-      const isRed = book.confidence === 'none';
-      const title = isRed ? (book.preliminaryTitle || book.booktitle || '') : (book.booktitle || '');
-      const author = isRed ? '' : (book.author || '');
-      const isbn_a = isRed ? '' : (book.isbn || '');
-      const cover = isRed ? '' : (book.cover || '');
-      // Extra metadata (leeg bij rode items)
-      const publisher = isRed ? '' : (book.publisher || '');
-      const year = isRed ? '' : (book.year || '');
-      const language = isRed ? '' : (book.language || '');
-      const description = isRed ? '' : (book.description || '');
-      // Combineer API subjects met user shelf tags
-      const apiSubjects = isRed ? '' : (book.subjects || '');
-      const allTags = [shelfTags, apiSubjects].filter(t => t).join(', ');
+    const content = [
+      '---',
+      `${fieldNames.cover}: "${cover}"`,
+      `${fieldNames.booktitle}: "${title}"`,
+      `${fieldNames.author}: "${author}"`,
+      `${fieldNames.isbn}: "${isbn_a}"`,
+      `${fieldNames.publisher}: "${publisher}"`,
+      `${fieldNames.year}: "${year}"`,
+      `${fieldNames.language}: "${language}"`,
+      `${fieldNames.tags}: "${allTags}"`,
+      s.includeConfidence ? `scan_confidence: ${book.confidence} (${Math.round((book.confidenceScore || 0) * 100)}%)` : null,
+      s.includeConfidence && book.confidenceSource ? `scan_source_api: ${book.confidenceSource}` : null,
+      s.includeMetadata ? `scan_source: "${state.currentImage?.filename || ''}"` : null,
+      s.includeMetadata ? `scan_date: ${new Date().toISOString()}` : null,
+      '---',
+      '',
+      `# ${title || 'Untitled'}`,
+      '',
+      ''
+    ].filter(line => line !== null).join('\n');
 
-      // Basis velden (cover is delimiter voor Libiry multi-book files)
-      const lines = [
-        `${fieldNames.cover}: ${cover}`,
-        `${fieldNames.booktitle}: ${title}`,
-        `${fieldNames.author}: ${author}`,
-        `${fieldNames.isbn}: ${isbn_a}`
-      ];
-
-      // Extra metadata in Goodreads volgorde (alleen toevoegen als gevuld)
-      // rating blijft leeg (user vult later in)
-      if (publisher) lines.push(`${fieldNames.publisher}: ${publisher}`);
-      if (year) lines.push(`${fieldNames.year}: ${year}`);
-      if (language) lines.push(`${fieldNames.language}: ${language}`);
-      if (allTags) lines.push(`${fieldNames.tags}: ${allTags}`);
-      // series en series_index blijven leeg (niet beschikbaar in APIs)
-      if (description) lines.push(`${fieldNames.description}: ${description}`);
-      // notes blijft leeg (user vult later in)
-
-      if (s.includeConfidence) {
-        lines.push(`scan_confidence: ${book.confidence}`);
-        if (book.confidence === 'medium' && book.candidates.length > 1) {
-          const candidateStr = book.candidates.map(c => `${c.title} (${c.author})`).join(' | ');
-          lines.push(`scan_candidates: ${candidateStr}`);
-        }
-        if (book.confidence === 'none' && book.preliminaryTitle) {
-          lines.push(`scan_preliminary: ${book.preliminaryTitle}`);
-        }
-      }
-
-      return lines.join('\n');
-    };
-
-    // Splits boeken in chunks van max 100
-    const chunks = [];
-    for (let i = 0; i < state.books.length; i += MAX_BOOKS_PER_FILE) {
-      chunks.push(state.books.slice(i, i + MAX_BOOKS_PER_FILE));
-    }
-
-    // Genereer een bestand per chunk
-    return chunks.map((chunk, chunkIndex) => {
-      // Filename: voeg part nummer toe als er meerdere chunks zijn
-      let filename = baseFilename;
-      if (chunks.length > 1) {
-        // Verwijder .md extensie, voeg part nummer toe, voeg extensie weer toe
-        const ext = filename.endsWith('.md') ? '.md' : '';
-        const base = ext ? filename.slice(0, -3) : filename;
-        filename = `${base}_part${chunkIndex + 1}${ext}`;
-      }
-
-      const header = s.includeMetadata ? [
-        '---',
-        `scan_date: ${date.toISOString()}`,
-        `scan_source: ${state.currentImage?.filename || ''}`,
-        `books_detected: ${chunk.length}`,
-        `books_total: ${state.books.length}`,
-        chunks.length > 1 ? `part: ${chunkIndex + 1} of ${chunks.length}` : null,
-        `lookup_source: ${s.lookupSource}`,
-        `scanner_version: 1.0.0`,
-        '---',
-        ''
-      ].filter(line => line !== null).join('\n') : '';
-
-      const booksContent = chunk.map(bookToMarkdown).join('\n\n');
-
-      return { filename, content: header + booksContent };
-    });
-  }
+    return { filename: finalFilename, content };
+  });
 }
 
 function sanitizeFilename(name) {
@@ -2649,6 +2783,17 @@ function initEventListeners() {
 
   // Navigation
   elements.btnSettings.addEventListener('click', () => showScreen('settings'));
+
+  // Info button - opent Libiry website
+  elements.btnInfo.addEventListener('click', () => {
+    window.open('https://libiry.org/', '_blank');
+  });
+
+  // Support button - opent support pagina
+  elements.btnSupport.addEventListener('click', () => {
+    window.open('https://sappelen.com/en/support-2/', '_blank');
+  });
+
   elements.btnSettingsBack.addEventListener('click', () => {
     collectSettings();
     showScreen('main');

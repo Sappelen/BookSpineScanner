@@ -1,6 +1,6 @@
 # Libiry BookSpineScanner
 
-Libiry BookSpineScanner is a Progressive Web App (PWA) that photographs bookshelves and extracts book metadata using OCR and book database lookups. It gives you flat '.md' (markdown) files, that can be used in Libiry (https://github.com/Sappelen/Libiry), Obsidian, Calibre and other tools.
+Libiry BookSpineScanner is a Progressive Web App (PWA) that photographs bookshelves and extracts book metadata using OCR and book database lookups. It gives you flat '.md' (markdown) files, that can be used in Libiry (https://github.com/Sappelen/Libiry), Obsidian and other tools.
 
 ## Getting started
 
@@ -31,7 +31,7 @@ No installation required. Works on desktop and mobile.
 2. **OCR** -- Text is read from each spine using Google Cloud Vision or Tesseract.js
 3. **Book lookup** -- Extracted text is searched in Open Library and/or Google Books
 4. **Review** -- Results are shown with confidence indicators (green/orange/red)
-5. **Export** -- Save as Libiry- and Obsidian-compatible markdown files
+5. **Export** -- Save as markdown files
 
 ## OCR engines
 
@@ -104,7 +104,7 @@ Click on a confidence dot to cycle its status (red > orange > green > red).
 
 - One '.md' file per book
 - All metadata in YAML frontmatter
-- Compatible with Obsidian, Logseq, Calibre, Libiry and any other text editor or reader
+- Compatible with Obsidian, Logseq, Calibre, Libiry and any other text editors or readers
 - Download as ZIP when exporting multiple books
 
 ## Customizing options

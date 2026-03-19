@@ -123,21 +123,17 @@ body {
 .header-right {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 12px;  /* Standaard afstand tussen icons */
 }
 
-.gear-icon {
-  width: 24px;
-  height: 24px;
-  object-fit: contain;
+/* Kleinere afstand voor en na het information icon (zoals in Libiry app) */
+.btn-icon-info {
+  margin-left: -4px;
+  margin-right: -4px;
 }
 
-.gear-icon-fallback {
-  width: 24px;
-  height: 24px;
-}
-
-.info-icon {
+/* Alle header icons dezelfde grootte */
+.header-icon {
   width: 24px;
   height: 24px;
   object-fit: contain;
@@ -521,22 +517,42 @@ body {
   background: var(--color-border);
 }
 
+/* Status indicators: checkmark (high), triangle (medium), X (none)
+   Shapes zijn beter voor kleurenblinden dan alleen gekleurde dots */
 .book-status {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: transform 0.15s;
 }
 
-.book-status:hover {
-  transform: scale(1.3);
+.book-status svg {
+  width: 100%;
+  height: 100%;
 }
 
-.book-status.high { background: var(--color-success); }
-.book-status.medium { background: var(--color-warning); }
-.book-status.none { background: var(--color-error); }
+.book-status:hover {
+  transform: scale(1.2);
+}
+
+/* Green checkmark for high confidence */
+.book-status.high {
+  color: var(--color-success);
+}
+
+/* Orange/yellow triangle for medium confidence */
+.book-status.medium {
+  color: var(--color-warning);
+}
+
+/* Red X for no match */
+.book-status.none {
+  color: var(--color-error);
+}
 
 .book-title {
   flex: 1;

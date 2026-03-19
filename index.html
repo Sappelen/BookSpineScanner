@@ -31,19 +31,20 @@
         <h1 class="header-title">Libiry BookSpineScanner</h1>
       </div>
       <div class="header-right">
-        <!-- Gear icon: try customize/gear.png first, then resources/gear.png, then SVG fallback -->
-        <button id="btn-settings" class="btn-icon" aria-label="Settings">
-          <img src="customize/gear.png" alt="Settings" class="gear-icon"
-               onerror="this.onerror=function(){this.style.display='none'; this.parentElement.querySelector('.gear-icon-fallback').style.display='block';}; this.src='resources/gear.png';">
-          <svg class="gear-icon-fallback" style="display:none" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="3"></circle>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-          </svg>
+        <!-- Information icon: kleinere afstand tot andere icons (zoals in Libiry app) -->
+        <button id="btn-info" class="btn-icon btn-icon-info" aria-label="About Libiry">
+          <img id="info-icon-img" src="customize/icons/information.png" alt="Information" class="header-icon"
+               onerror="this.onerror=null; this.src='resources/icons/information.png';">
         </button>
-        <!-- Information icon: try customize/information.png first, then resources/information.png -->
-        <button id="btn-info" class="btn-icon" aria-label="Information" onclick="showInfo()">
-          <img src="customize/information.png" alt="Information" class="info-icon"
-               onerror="this.onerror=null; this.src='resources/information.png';">
+        <!-- Gear/Settings icon -->
+        <button id="btn-settings" class="btn-icon" aria-label="Settings">
+          <img id="gear-icon-img" src="customize/icons/gear.png" alt="Settings" class="header-icon"
+               onerror="this.onerror=null; this.src='resources/icons/gear.png';">
+        </button>
+        <!-- Support icon -->
+        <button id="btn-support" class="btn-icon" aria-label="Support">
+          <img id="support-icon-img" src="customize/icons/support.png" alt="Support" class="header-icon"
+               onerror="this.onerror=null; this.src='resources/icons/support.png';">
         </button>
       </div>
     </header>
@@ -267,8 +268,9 @@
               <option value="openlibrary">Open Library (recommended)</option>
               <option value="googlebooks">Google Books</option>
               <option value="both">Both (Open Library first)</option>
-              <option value="all">All sources (OL → Google → Europeana)</option>
+              <option value="all">All sources (OL → Google → Europeana → LoC)</option>
               <option value="europeana">Europeana only</option>
+              <option value="loc">Library of Congress only</option>
             </select>
           </div>
 
@@ -301,15 +303,6 @@
             <p class="setting-hint">Language models are downloaded on demand by Tesseract.js</p>
           </div>
 
-          <!-- Export Format -->
-          <div class="setting-group">
-            <label class="setting-label" for="setting-format">Export Format</label>
-            <select id="setting-format" class="setting-select">
-              <option value="libiry">Libiry (multiple books per file)</option>
-              <option value="obsidian">Obsidian (one file per book)</option>
-            </select>
-          </div>
-
           <!-- Filename Pattern -->
           <div class="setting-group">
             <label class="setting-label" for="setting-filename">Filename Pattern</label>
@@ -320,7 +313,7 @@
           <!-- Field Names -->
           <div class="setting-group">
             <h3 class="setting-subheader">Custom Field Names</h3>
-            <p class="setting-hint">Match your existing Obsidian notes</p>
+            <p class="setting-hint">Match your existing markdown field names</p>
 
             <div class="field-name-grid">
               <label for="field-cover">Cover:</label>
