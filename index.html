@@ -128,16 +128,8 @@
           <div class="results-header">
             <h2 id="results-count">0 books detected</h2>
             <div class="results-filters">
-              <button class="filter-btn filter-btn-high" onclick="selectAllByConfidence('high')" title="Select all green / click again to deselect">
-                <span class="filter-btn-label">Select <span id="count-high">0</span></span>
-              </button>
-              <button class="filter-btn filter-btn-medium" onclick="selectAllByConfidence('medium')" title="Select all orange / click again to deselect">
-                <span class="filter-btn-label">Select <span id="count-medium">0</span></span>
-              </button>
-              <button class="filter-btn filter-btn-none" onclick="selectAllByConfidence('none')" title="Select all red / click again to deselect">
-                <span class="filter-btn-label">Select <span id="count-none">0</span></span>
-              </button>
-              <button class="filter-btn filter-btn-delete" onclick="deleteSelected()" title="Delete selected">Delete</button>
+              <button class="btn-lookup" onclick="selectAll()" title="Select all / click again to deselect">Select all</button>
+              <button class="btn-remove" onclick="deleteSelected()" title="Delete selected">Delete</button>
             </div>
           </div>
 
@@ -161,19 +153,12 @@
         <div class="tags-input-container">
           <label for="shelf-tags" class="tags-label">Tags:</label>
           <input type="text" id="shelf-tags" class="tags-input"
-                 placeholder="e.g. bovensteplank, wishlist"
+                 placeholder="e.g. shelf/upper-left, collection/favorites, type/analog, wishlist"
                  list="tags-suggestions"
                  autocomplete="off">
           <datalist id="tags-suggestions"></datalist>
         </div>
 
-        <button id="btn-copy" class="btn btn-secondary">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-          </svg>
-          Copy
-        </button>
         <button id="btn-share" class="btn btn-secondary mobile-only" onclick="shareExport()">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="18" cy="5" r="3"></circle>
@@ -261,17 +246,43 @@
             <p class="setting-hint">Enable when books have visible ISBN barcodes</p>
           </div>
 
-          <!-- Lookup Source -->
+          <!-- Lookup Sources -->
           <div class="setting-group">
-            <label class="setting-label" for="setting-lookup">Book Lookup Source</label>
-            <select id="setting-lookup" class="setting-select">
-              <option value="openlibrary">Open Library (recommended)</option>
-              <option value="googlebooks">Google Books</option>
-              <option value="both">Both (Open Library first)</option>
-              <option value="all">All sources (OL → Google → Europeana → LoC)</option>
-              <option value="europeana">Europeana only</option>
-              <option value="loc">Library of Congress only</option>
-            </select>
+            <label class="setting-label">Book Lookup Sources</label>
+            <div class="lookup-checkboxes">
+              <label class="checkbox-label">
+                <input type="checkbox" id="lookup-openlibrary" checked>
+                <span>Open Library (API)</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="lookup-googlebooks" checked>
+                <span>Google Books (API)</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="lookup-europeana">
+                <span>Europeana (API)</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="lookup-loc">
+                <span>Library of Congress (API)</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="lookup-amazon">
+                <span>Amazon (scraping - slow)</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="lookup-goodreads">
+                <span>Goodreads (scraping - slow)</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="lookup-boekwinkeltjes">
+                <span>Boekwinkeltjes.nl (scraping - slow)</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="lookup-bolcom">
+                <span>Bol.com (scraping - slow)</span>
+              </label>
+            </div>
           </div>
 
           <!-- OCR Language -->

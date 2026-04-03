@@ -11,6 +11,7 @@ import Tesseract from 'tesseract.js';
 
 const state = {
   currentScreen: 'main',
+  previousScreen: null,  // For returning from settings
   currentImage: null,
   books: [],
   batchFiles: [],      // For multi-file batch processing
@@ -20,14 +21,23 @@ const state = {
   isProcessing: false,
   isOffline: !navigator.onLine,
   deferredInstallPrompt: null, // PWA install prompt
-  shelfTags: '',  // Tags for current shelf/scan (e.g. "bovensteplank, wishlist")
-  tagHistory: [], // Eerder gebruikte tags voor autocomplete suggesties
+  shelfTags: '',  // Tags for current shelf/scan (e.g. "type/analog, shelf/upper-left, wishlist")
+  tagHistory: [], // Previously used tags for autocomplete suggestions
   settings: {
-    lookupSource: 'openlibrary',
+    lookupSources: {
+      openlibrary: true,
+      googlebooks: true,
+      europeana: false,
+      loc: false,
+      amazon: false,
+      goodreads: false,
+      boekwinkeltjes: false,
+      bolcom: false
+    },
     ocrEngine: 'tesseract',
     language: 'eng+nld',
-    exportFormat: 'obsidian',  // Altijd 1 boek per file (Obsidian compatible)
-    filenamePattern: 'shelf_[DATE]_[TIME].md',
+    exportFormat: 'obsidian', //now redundant
+    filenamePattern: '[author] - [booktitle] - [DATE]_[SEQ].md',
     includeMetadata: true,
     includeConfidence: true,
     includePhotoInExport: false,
@@ -40,14 +50,14 @@ const state = {
       cover: '',
       booktitle: '',
       author: '',
-      isbn: '',           // Was isbn, isbn_digital verwijderd
+      isbn: '',           // Was isbn_analog plus isbn_digital, simplified
       rating: '',         // Goodreads: My Rating
       publisher: '',      // Goodreads: Publisher
       year: '',           // Goodreads: Year Published
-      language: '',       // Extra: taal
+      language: '',       // Extra
       tags: '',           // Goodreads: Bookshelves
-      series: '',         // Extra: serie naam
-      series_index: '',   // Extra: serie volgnummer
+      series: '',         // Extra
+      series_index: '',   // Extra
       description: '',    // Goodreads: My Review
       notes: ''           // Goodreads: Private Notes
     }
@@ -79,7 +89,6 @@ const elements = {
   btnSettingsBack: $('#btn-settings-back'),
   btnCancel: $('#btn-cancel'),
   btnNewScan: $('#btn-new-scan'),
-  btnCopy: $('#btn-copy'),
   btnExport: $('#btn-export'),
   previewImage: $('#preview-image'),
   detectionCanvas: $('#detection-canvas'),
@@ -89,9 +98,6 @@ const elements = {
   resultsCanvas: $('#results-canvas'),
   resultsCount: $('#results-count'),
   booksList: $('#books-list'),
-  countHigh: $('#count-high'),
-  countMedium: $('#count-medium'),
-  countNone: $('#count-none'),
   recentList: $('#recent-list'),
   toast: $('#toast')
 };
@@ -127,6 +133,23 @@ function loadSettings() {
           delete state.settings.fieldNames.isbn_digital;
           saveSettings(); // Persist migration
         }
+      }
+
+      // Migrate old lookupSource string to lookupSources object
+      if (state.settings.lookupSource && !state.settings.lookupSources) {
+        const oldSource = state.settings.lookupSource;
+        state.settings.lookupSources = {
+          openlibrary: oldSource === 'openlibrary' || oldSource === 'both' || oldSource === 'all',
+          googlebooks: oldSource === 'googlebooks' || oldSource === 'both' || oldSource === 'all',
+          europeana: oldSource === 'europeana' || oldSource === 'all',
+          loc: oldSource === 'loc' || oldSource === 'all',
+          amazon: oldSource === 'amazon' || oldSource === 'scrape' || oldSource === 'all',
+          goodreads: oldSource === 'goodreads' || oldSource === 'scrape' || oldSource === 'all',
+          boekwinkeltjes: oldSource === 'boekwinkeltjes' || oldSource === 'dutch' || oldSource === 'scrape' || oldSource === 'all',
+          bolcom: oldSource === 'bolcom' || oldSource === 'dutch' || oldSource === 'scrape' || oldSource === 'all'
+        };
+        delete state.settings.lookupSource;
+        saveSettings(); // Persist migration
       }
     } else {
       // No saved settings (new user): follow system dark mode preference
@@ -235,8 +258,15 @@ function applySettings() {
   setIconWithFallback('info-icon-img', 'information');
   setIconWithFallback('support-icon-img', 'support');
 
+  // Update lookup source checkboxes
+  const sources = state.settings.lookupSources || {};
+  const lookupIds = ['openlibrary', 'googlebooks', 'europeana', 'loc', 'amazon', 'goodreads', 'boekwinkeltjes', 'bolcom'];
+  for (const id of lookupIds) {
+    const checkbox = $(`#lookup-${id}`);
+    if (checkbox) checkbox.checked = !!sources[id];
+  }
+
   // Update form fields
-  $('#setting-lookup').value = state.settings.lookupSource;
   $('#setting-ocr-engine').value = state.settings.ocrEngine;
   $('#setting-language').value = state.settings.language;
   $('#setting-filename').value = state.settings.filenamePattern;
@@ -272,7 +302,14 @@ function applySettings() {
 }
 
 function collectSettings() {
-  state.settings.lookupSource = $('#setting-lookup').value;
+  // Collect lookup source checkboxes
+  const lookupIds = ['openlibrary', 'googlebooks', 'europeana', 'loc', 'amazon', 'goodreads', 'boekwinkeltjes', 'bolcom'];
+  state.settings.lookupSources = {};
+  for (const id of lookupIds) {
+    const checkbox = $(`#lookup-${id}`);
+    state.settings.lookupSources[id] = checkbox ? checkbox.checked : false;
+  }
+
   state.settings.ocrEngine = $('#setting-ocr-engine').value;
   state.settings.language = $('#setting-language').value;
   state.settings.filenamePattern = $('#setting-filename').value;
@@ -1380,70 +1417,81 @@ async function rateLimitedFetch(url) {
 
 async function lookupBooks(parsedBooks) {
   const results = [];
+  const HIGH_CONFIDENCE_THRESHOLD = 0.85;
 
   for (const parsed of parsedBooks) {
     const searchQuery = parsed.possibleTitle || parsed.rawText;
 
-    // Verzamel resultaten van ALLE bronnen en kies de beste match
-    // Oude aanpak: eerste bron die iets vindt wint (kon slechte match van bron A
-    // kiezen terwijl bron B een betere match had)
-    // Nieuwe aanpak: alle bronnen bevragen, beste similarity score wint
+    // Early exit strategy: stop searching when we find a high confidence match.
+    // This significantly speeds up lookups when exact title/author is provided.
     let allResults = [];
+    let foundHighConfidence = false;
+
+    // Helper to add result and check for early exit
+    const addResult = (source, searchResult) => {
+      if (!searchResult || !searchResult.best) return false;
+      const score = calculateConfidenceScore(searchQuery, searchResult.best);
+      allResults.push({
+        source: source,
+        bookData: searchResult.best,
+        candidates: searchResult.candidates,
+        score: score
+      });
+      // Return true if this is a high confidence match
+      return score > HIGH_CONFIDENCE_THRESHOLD;
+    };
 
     try {
-      // Open Library lookup
-      if (state.settings.lookupSource === 'openlibrary' || state.settings.lookupSource === 'both' || state.settings.lookupSource === 'all') {
+      const sources = state.settings.lookupSources || {};
+
+      // Open Library lookup (fast, reliable - check first)
+      if (sources.openlibrary) {
         const olResult = await searchOpenLibrary(searchQuery);
-        if (olResult && olResult.best) {
-          const score = calculateConfidenceScore(searchQuery, olResult.best);
-          allResults.push({
-            source: 'openlibrary',
-            bookData: olResult.best,
-            candidates: olResult.candidates,
-            score: score
-          });
-        }
+        if (addResult('openlibrary', olResult)) foundHighConfidence = true;
       }
 
       // Google Books lookup
-      if (state.settings.lookupSource === 'googlebooks' || state.settings.lookupSource === 'both' || state.settings.lookupSource === 'all') {
+      if (!foundHighConfidence && sources.googlebooks) {
         const gbResult = await searchGoogleBooks(searchQuery);
-        if (gbResult && gbResult.best) {
-          const score = calculateConfidenceScore(searchQuery, gbResult.best);
-          allResults.push({
-            source: 'googlebooks',
-            bookData: gbResult.best,
-            candidates: gbResult.candidates,
-            score: score
-          });
-        }
+        if (addResult('googlebooks', gbResult)) foundHighConfidence = true;
       }
 
-      // Europeana lookup
-      if (state.settings.lookupSource === 'europeana' || state.settings.lookupSource === 'all') {
-        const euResult = await searchEuropeana(searchQuery);
-        if (euResult && euResult.best) {
-          const score = calculateConfidenceScore(searchQuery, euResult.best);
-          allResults.push({
-            source: 'europeana',
-            bookData: euResult.best,
-            candidates: euResult.candidates,
-            score: score
-          });
+      // Skip slower sources if we already have a high confidence match
+      if (!foundHighConfidence) {
+        // Europeana lookup
+        if (sources.europeana) {
+          const euResult = await searchEuropeana(searchQuery);
+          if (addResult('europeana', euResult)) foundHighConfidence = true;
         }
-      }
 
-      // Library of Congress lookup
-      if (state.settings.lookupSource === 'loc' || state.settings.lookupSource === 'all') {
-        const locResult = await searchLibraryOfCongress(searchQuery);
-        if (locResult && locResult.best) {
-          const score = calculateConfidenceScore(searchQuery, locResult.best);
-          allResults.push({
-            source: 'loc',
-            bookData: locResult.best,
-            candidates: locResult.candidates,
-            score: score
-          });
+        // Library of Congress lookup
+        if (!foundHighConfidence && sources.loc) {
+          const locResult = await searchLibraryOfCongress(searchQuery);
+          if (addResult('loc', locResult)) foundHighConfidence = true;
+        }
+
+        // Amazon lookup - slower due to scraping
+        if (!foundHighConfidence && sources.amazon) {
+          const amazonResult = await searchAmazon(searchQuery);
+          if (addResult('amazon', amazonResult)) foundHighConfidence = true;
+        }
+
+        // Goodreads lookup - slower due to scraping
+        if (!foundHighConfidence && sources.goodreads) {
+          const grResult = await searchGoodreads(searchQuery);
+          if (addResult('goodreads', grResult)) foundHighConfidence = true;
+        }
+
+        // Boekwinkeltjes.nl lookup (Dutch second-hand books) - slower due to scraping
+        if (!foundHighConfidence && sources.boekwinkeltjes) {
+          const bwResult = await searchBoekwinkeltjes(searchQuery);
+          if (addResult('boekwinkeltjes', bwResult)) foundHighConfidence = true;
+        }
+
+        // Bol.com lookup (Dutch e-commerce) - slower due to scraping
+        if (!foundHighConfidence && sources.bolcom) {
+          const bolResult = await searchBolCom(searchQuery);
+          addResult('bolcom', bolResult);
         }
       }
     } catch (error) {
@@ -1888,6 +1936,497 @@ async function searchLibraryOfCongress(query) {
   }
 }
 
+// =============================================================================
+// CORS Proxy Helper for Web Scraping
+// =============================================================================
+
+/**
+ * Fetch URL through a CORS proxy to bypass browser restrictions.
+ * Uses corsproxy.io which is reliable and fast.
+ * Falls back to allorigins.win if first proxy fails.
+ *
+ * @param {string} url - The URL to fetch
+ * @returns {Promise<string>} - HTML content of the page
+ */
+async function fetchViaCorsProxy(url) {
+  // Primary proxy: corsproxy.io (fast, reliable)
+  const primaryProxy = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+
+  try {
+    const response = await fetch(primaryProxy, { signal: AbortSignal.timeout(10000) });
+    if (response.ok) {
+      return await response.text();
+    }
+  } catch (e) {
+    console.warn('Primary CORS proxy failed, trying fallback...', e);
+  }
+
+  // Fallback proxy: allorigins.win
+  try {
+    const fallbackProxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    const fallbackResponse = await fetch(fallbackProxy, { signal: AbortSignal.timeout(10000) });
+
+    if (fallbackResponse.ok) {
+      return await fallbackResponse.text();
+    }
+  } catch (e) {
+    console.warn('Fallback CORS proxy also failed:', e);
+  }
+
+  // Both proxies failed - return empty string instead of throwing
+  // This prevents the error from bubbling up and crashing the UI
+  console.error('All CORS proxies failed for:', url);
+  return '';
+}
+
+// =============================================================================
+// Amazon Scraping (International books)
+// =============================================================================
+
+/**
+ * Search Amazon for book metadata.
+ * Amazon has the largest book catalog worldwide.
+ * Uses amazon.com for broadest coverage.
+ *
+ * @param {string} query - Search query (title, author, or combined)
+ * @returns {Object|null} - { best, candidates } or null if not found
+ */
+async function searchAmazon(query) {
+  try {
+    // Check cache first
+    const cached = await getCachedLookup('amazon', query);
+    if (cached) return cached;
+
+    // Search in Books category on Amazon.com
+    const searchUrl = `https://www.amazon.com/s?k=${encodeURIComponent(query)}&i=stripbooks`;
+    const html = await fetchViaCorsProxy(searchUrl);
+
+    // If proxy failed, return null gracefully
+    if (!html || html.length < 100) {
+      console.log('Amazon: No response from proxy');
+      return null;
+    }
+
+    // Parse HTML
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+
+    // Amazon uses data-component-type="s-search-result" for search results
+    const searchResults = doc.querySelectorAll('[data-component-type="s-search-result"], .s-result-item');
+
+    const candidates = [];
+    const results = Array.from(searchResults).slice(0, 5);
+
+    for (const item of results) {
+      // Skip sponsored items
+      if (item.querySelector('[data-component-type="sp-sponsored-result"]')) continue;
+
+      // Extract title
+      let title = '';
+      const titleEl = item.querySelector('h2 a span, h2 span, .a-text-normal');
+      if (titleEl) {
+        title = titleEl.textContent.trim();
+      }
+
+      // Extract author (usually in a div below title)
+      let author = '';
+      const authorEl = item.querySelector('.a-row .a-size-base+ .a-size-base, [class*="author"], .a-color-secondary');
+      if (authorEl) {
+        author = authorEl.textContent.replace(/^by\s+/i, '').trim();
+      }
+
+      // Extract cover image
+      let cover = '';
+      const imgEl = item.querySelector('img.s-image, img[data-image-latency="s-product-image"]');
+      if (imgEl && imgEl.src) {
+        cover = imgEl.src;
+      }
+
+      // Extract ASIN (Amazon's ID) from data attribute or URL
+      let isbn = '';
+      const asin = item.dataset.asin;
+      if (asin && /^\d{10}$/.test(asin)) {
+        // 10-digit ASIN might be ISBN-10
+        isbn = asin;
+      }
+
+      if (title) {
+        candidates.push({
+          title: title,
+          author: author,
+          isbn: isbn,
+          cover: cover,
+          publisher: '',
+          year: '',
+          language: '',
+          description: '',
+          subjects: '',
+          source: 'Amazon'
+        });
+      }
+    }
+
+    if (candidates.length === 0) return null;
+
+    const result = { best: candidates[0], candidates };
+    await setCachedLookup('amazon', query, result);
+    return result;
+
+  } catch (error) {
+    console.error('Amazon search error:', error);
+    return null;
+  }
+}
+
+// =============================================================================
+// Goodreads Scraping (Book community & reviews)
+// =============================================================================
+
+/**
+ * Search Goodreads for book metadata.
+ * Goodreads has extensive book data with community ratings and reviews.
+ * Good for finding books with reader reviews and ratings.
+ *
+ * @param {string} query - Search query (title, author, or combined)
+ * @returns {Object|null} - { best, candidates } or null if not found
+ */
+async function searchGoodreads(query) {
+  try {
+    // Check cache first
+    const cached = await getCachedLookup('goodreads', query);
+    if (cached) return cached;
+
+    const searchUrl = `https://www.goodreads.com/search?q=${encodeURIComponent(query)}`;
+    const html = await fetchViaCorsProxy(searchUrl);
+
+    // If proxy failed, return null gracefully
+    if (!html || html.length < 100) {
+      console.log('Goodreads: No response from proxy');
+      return null;
+    }
+
+    // Parse HTML
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+
+    // Goodreads uses table rows for search results
+    const bookRows = doc.querySelectorAll('tr[itemtype="http://schema.org/Book"], .tableList tr, .bookTitle');
+
+    const candidates = [];
+    const results = Array.from(bookRows).slice(0, 5);
+
+    for (const row of results) {
+      // Extract title
+      let title = '';
+      const titleEl = row.querySelector('.bookTitle, [itemprop="name"], a.bookTitle');
+      if (titleEl) {
+        title = titleEl.textContent.trim();
+      }
+
+      // Extract author
+      let author = '';
+      const authorEl = row.querySelector('.authorName, [itemprop="author"], a.authorName');
+      if (authorEl) {
+        author = authorEl.textContent.trim();
+      }
+
+      // Extract cover image
+      let cover = '';
+      const imgEl = row.querySelector('img.bookCover, img[itemprop="image"]');
+      if (imgEl) {
+        cover = imgEl.src || imgEl.dataset.src || '';
+        // Goodreads sometimes uses small thumbnails, try to get larger version
+        if (cover.includes('._SX')) {
+          cover = cover.replace(/\._SX\d+_/, '._SX300_');
+        }
+      }
+
+      // Extract rating if available
+      let rating = '';
+      const ratingEl = row.querySelector('.minirating, [itemprop="ratingValue"]');
+      if (ratingEl) {
+        const ratingMatch = ratingEl.textContent.match(/[\d.]+/);
+        if (ratingMatch) rating = ratingMatch[0];
+      }
+
+      // Extract ISBN from URL or page
+      let isbn = '';
+      const linkEl = row.querySelector('a[href*="/book/show/"]');
+      if (linkEl) {
+        const isbnMatch = linkEl.href.match(/(\d{10}|\d{13})/);
+        if (isbnMatch) isbn = isbnMatch[1];
+      }
+
+      if (title) {
+        candidates.push({
+          title: title,
+          author: author,
+          isbn: isbn,
+          cover: cover,
+          publisher: '',
+          year: '',
+          language: '',
+          description: '',
+          subjects: '',
+          rating: rating,
+          source: 'Goodreads'
+        });
+      }
+    }
+
+    if (candidates.length === 0) return null;
+
+    const result = { best: candidates[0], candidates };
+    await setCachedLookup('goodreads', query, result);
+    return result;
+
+  } catch (error) {
+    console.error('Goodreads search error:', error);
+    return null;
+  }
+}
+
+// =============================================================================
+// Boekwinkeltjes.nl Scraping (Dutch second-hand books)
+// =============================================================================
+
+/**
+ * Search boekwinkeltjes.nl for book metadata.
+ * Boekwinkeltjes is a Dutch marketplace for second-hand and antiquarian books.
+ * Good for Dutch books and older editions.
+ *
+ * @param {string} query - Search query (title, author, or combined)
+ * @returns {Object|null} - { best, candidates } or null if not found
+ */
+async function searchBoekwinkeltjes(query) {
+  try {
+    // Check cache first
+    const cached = await getCachedLookup('boekwinkeltjes', query);
+    if (cached) return cached;
+
+    const searchUrl = `https://www.boekwinkeltjes.nl/s/?q=${encodeURIComponent(query)}`;
+    const html = await fetchViaCorsProxy(searchUrl);
+
+    // If proxy failed, return null gracefully
+    if (!html || html.length < 100) {
+      console.log('Boekwinkeltjes: No response from proxy');
+      return null;
+    }
+
+    // Parse HTML
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+
+    // Boekwinkeltjes uses article.book-card for search results
+    const bookCards = doc.querySelectorAll('article.book-card, .search-result, .book-item');
+
+    if (!bookCards || bookCards.length === 0) {
+      // Try alternative selectors
+      const altResults = doc.querySelectorAll('[class*="result"], [class*="book"]');
+      if (!altResults || altResults.length === 0) {
+        console.log('Boekwinkeltjes: No results found for', query);
+        return null;
+      }
+    }
+
+    const candidates = [];
+
+    // Iterate through results (limit to first 5)
+    const results = Array.from(bookCards).slice(0, 5);
+
+    for (const card of results) {
+      // Extract title - look for common title patterns
+      let title = '';
+      const titleEl = card.querySelector('h2, h3, .title, [class*="title"], a[href*="/b/"]');
+      if (titleEl) {
+        title = titleEl.textContent.trim();
+      }
+
+      // Extract author
+      let author = '';
+      const authorEl = card.querySelector('.author, [class*="author"], .creator');
+      if (authorEl) {
+        author = authorEl.textContent.trim();
+      }
+
+      // Extract price (useful indicator of result relevance)
+      let price = '';
+      const priceEl = card.querySelector('.price, [class*="price"]');
+      if (priceEl) {
+        price = priceEl.textContent.trim();
+      }
+
+      // Extract cover image
+      let cover = '';
+      const imgEl = card.querySelector('img');
+      if (imgEl && imgEl.src) {
+        cover = imgEl.src;
+        // Make sure it's absolute URL
+        if (cover.startsWith('/')) {
+          cover = 'https://www.boekwinkeltjes.nl' + cover;
+        }
+      }
+
+      // Extract ISBN if available (often in details or data attributes)
+      let isbn = '';
+      const isbnMatch = card.innerHTML.match(/(?:ISBN[:\s]*)?(\d{10}|\d{13})/i);
+      if (isbnMatch) {
+        isbn = isbnMatch[1];
+      }
+
+      if (title) {
+        candidates.push({
+          title: title,
+          author: author,
+          isbn: isbn,
+          cover: cover,
+          publisher: '',
+          year: '',
+          language: 'nld',  // Boekwinkeltjes is Dutch-focused
+          description: '',
+          subjects: '',
+          source: 'Boekwinkeltjes.nl',
+          price: price
+        });
+      }
+    }
+
+    if (candidates.length === 0) return null;
+
+    const result = { best: candidates[0], candidates };
+    await setCachedLookup('boekwinkeltjes', query, result);
+    return result;
+
+  } catch (error) {
+    console.error('Boekwinkeltjes search error:', error);
+    return null;
+  }
+}
+
+// =============================================================================
+// Bol.com Scraping (Dutch e-commerce)
+// =============================================================================
+
+/**
+ * Search bol.com for book metadata.
+ * Bol.com is the largest Dutch e-commerce site with extensive book catalog.
+ * Good for current Dutch and international books.
+ *
+ * Note: Bol.com has anti-bot measures. Results may be limited.
+ *
+ * @param {string} query - Search query (title, author, or combined)
+ * @returns {Object|null} - { best, candidates } or null if not found
+ */
+async function searchBolCom(query) {
+  try {
+    // Check cache first
+    const cached = await getCachedLookup('bolcom', query);
+    if (cached) return cached;
+
+    // Search specifically in books category
+    const searchUrl = `https://www.bol.com/nl/nl/s/?searchtext=${encodeURIComponent(query)}&categoryId=8299`;
+    const html = await fetchViaCorsProxy(searchUrl);
+
+    // If proxy failed, return null gracefully
+    if (!html || html.length < 100) {
+      console.log('Bol.com: No response from proxy');
+      return null;
+    }
+
+    // Parse HTML
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+
+    // Bol.com uses various product card classes
+    const productCards = doc.querySelectorAll('[data-test="product-title"], .product-item, [class*="product-card"]');
+
+    const candidates = [];
+
+    // If direct product cards not found, try finding product links
+    let productElements = Array.from(productCards);
+    if (productElements.length === 0) {
+      // Alternative: find any product-related elements
+      const links = doc.querySelectorAll('a[href*="/p/"], [class*="product"]');
+      productElements = Array.from(links).slice(0, 5);
+    }
+
+    // Limit to first 5 results
+    productElements = productElements.slice(0, 5);
+
+    for (const el of productElements) {
+      // Find the parent product container
+      const card = el.closest('[class*="product"]') || el;
+
+      // Extract title
+      let title = '';
+      const titleEl = card.querySelector('[data-test="product-title"], h3, .product-title, [class*="title"]');
+      if (titleEl) {
+        title = titleEl.textContent.trim();
+      } else if (el.textContent) {
+        title = el.textContent.trim();
+      }
+
+      // Extract author/subtitle (Bol.com often shows author in subtitle)
+      let author = '';
+      const subtitleEl = card.querySelector('[class*="subtitle"], [class*="author"], .product-creator');
+      if (subtitleEl) {
+        author = subtitleEl.textContent.trim();
+      }
+
+      // Extract price
+      let price = '';
+      const priceEl = card.querySelector('[class*="price"], [data-test*="price"]');
+      if (priceEl) {
+        price = priceEl.textContent.trim().replace(/\s+/g, ' ');
+      }
+
+      // Extract cover image
+      let cover = '';
+      const imgEl = card.querySelector('img');
+      if (imgEl) {
+        cover = imgEl.src || imgEl.dataset.src || imgEl.getAttribute('data-lazy-src') || '';
+      }
+
+      // Extract ISBN from URL or page content
+      let isbn = '';
+      const linkEl = card.querySelector('a[href*="/p/"]') || card.closest('a[href*="/p/"]');
+      if (linkEl) {
+        // Bol.com URLs sometimes contain ISBN-like identifiers
+        const urlMatch = linkEl.href.match(/\/(\d{13})(?:\/|$)/);
+        if (urlMatch) {
+          isbn = urlMatch[1];
+        }
+      }
+
+      if (title && title.length > 2) {
+        candidates.push({
+          title: title,
+          author: author,
+          isbn: isbn,
+          cover: cover,
+          publisher: '',
+          year: '',
+          language: '',
+          description: '',
+          subjects: '',
+          source: 'Bol.com',
+          price: price
+        });
+      }
+    }
+
+    if (candidates.length === 0) return null;
+
+    const result = { best: candidates[0], candidates };
+    await setCachedLookup('bolcom', query, result);
+    return result;
+
+  } catch (error) {
+    console.error('Bol.com search error:', error);
+    return null;
+  }
+}
+
 // Berekent numerieke confidence score (0-1) voor vergelijking tussen bronnen
 // Gebruikt stringSimilarity om OCR tekst te vergelijken met gevonden titel
 function calculateConfidenceScore(query, bookData) {
@@ -1969,21 +2508,12 @@ function showResults() {
   // Show image
   elements.resultsImage.src = state.currentImage.dataUrl;
 
-  // Update counts
-  const counts = { high: 0, medium: 0, none: 0 };
-  state.books.forEach(book => counts[book.confidence]++);
-
-  elements.countHigh.textContent = counts.high;
-  elements.countMedium.textContent = counts.medium;
-  elements.countNone.textContent = counts.none;
   elements.resultsCount.textContent = `${state.books.length} books detected`;
 
-  // Show/hide ZIP button based on export format
+  // Always show ZIP button - user can add more books later
   const zipBtn = document.getElementById('btn-export-zip');
   if (zipBtn) {
-    // Altijd 1 bestand per boek, dus multi-file als er meerdere boeken zijn
-    const isMultiFile = state.books.length > 1;
-    zipBtn.style.display = isMultiFile ? 'inline-flex' : 'none';
+    zipBtn.style.display = 'inline-flex';
   }
 
   // Render books
@@ -2049,7 +2579,9 @@ function renderBooksList() {
         </div>
         <div class="book-title">${book.confidence === 'none'
           ? (book.preliminaryTitle || book.booktitle || 'Unknown')
-          : (book.booktitle || book.preliminaryTitle || 'Unknown')}</div>
+          : (book.author && (book.booktitle || book.preliminaryTitle)
+              ? `${book.author} - ${book.booktitle || book.preliminaryTitle}`
+              : (book.booktitle || book.preliminaryTitle || 'Unknown'))}</div>
         <svg class="book-expand" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="6 9 12 15 18 9"></polyline>
         </svg>
@@ -2057,33 +2589,35 @@ function renderBooksList() {
       <div class="book-details">
         ${book.confidence === 'none' || !book.booktitle ? `
           <div class="book-field">
-            <label>Preliminary Title (from OCR)</label>
+            <label>Preliminary</label>
             <input type="text" value="${escapeHtml(book.preliminaryTitle)}" onchange="updateBook('${book.id}', 'preliminaryTitle', this.value)">
           </div>
         ` : ''}
         <div class="book-field">
-          <label>Title${book.confidence === 'none' ? ' (from lookup - empty if not found)' : ''}</label>
+          <label>Title</label>
           <input type="text" value="${escapeHtml(book.booktitle)}" onchange="updateBook('${book.id}', 'booktitle', this.value)">
         </div>
         <div class="book-field">
           <label>Author</label>
           <input type="text" value="${escapeHtml(book.author)}" onchange="updateBook('${book.id}', 'author', this.value)">
         </div>
-        <div class="book-field">
-          <label>ISBN</label>
-          <input type="text" value="${escapeHtml(book.isbn)}" onchange="updateBook('${book.id}', 'isbn', this.value)">
+        <div class="book-field-row">
+          <div class="book-field">
+            <label>ISBN</label>
+            <input type="text" value="${escapeHtml(book.isbn)}" onchange="updateBook('${book.id}', 'isbn', this.value)">
+          </div>
+          <div class="book-field">
+            <label>Year</label>
+            <input type="text" value="${escapeHtml(book.year || '')}" onchange="updateBook('${book.id}', 'year', this.value)">
+          </div>
+          <div class="book-field">
+            <label>Language</label>
+            <input type="text" value="${escapeHtml(book.language || '')}" onchange="updateBook('${book.id}', 'language', this.value)">
+          </div>
         </div>
         <div class="book-field">
           <label>Publisher</label>
           <input type="text" value="${escapeHtml(book.publisher || '')}" onchange="updateBook('${book.id}', 'publisher', this.value)">
-        </div>
-        <div class="book-field">
-          <label>Year</label>
-          <input type="text" value="${escapeHtml(book.year || '')}" onchange="updateBook('${book.id}', 'year', this.value)">
-        </div>
-        <div class="book-field">
-          <label>Language</label>
-          <input type="text" value="${escapeHtml(book.language || '')}" onchange="updateBook('${book.id}', 'language', this.value)">
         </div>
         <div class="book-field">
           <label>Tags</label>
@@ -2103,7 +2637,10 @@ function renderBooksList() {
             </select>
           </div>
         ` : ''}
-        <button class="btn btn-remove" onclick="event.stopPropagation(); removeBook('${book.id}')" aria-label="Remove book">Remove</button>
+        <div class="book-actions">
+          <button class="btn btn-lookup" onclick="event.stopPropagation(); relookupBook('${book.id}')" aria-label="Re-lookup book">Lookup</button>
+          <button class="btn btn-remove" onclick="event.stopPropagation(); removeBook('${book.id}')" aria-label="Remove book">Delete</button>
+        </div>
       </div>
     </div>
   `).join('') + `
@@ -2157,6 +2694,171 @@ window.removeBook = function(id) {
   updateBookCounts();
 };
 
+/**
+ * Check if newValue is a "cleaner" version of oldValue.
+ * Cleaner means: same content but better formatting (e.g., "Platt" vs "PLATT").
+ * Returns true if newValue should replace oldValue.
+ */
+function isCleanerVersion(oldValue, newValue) {
+  if (!oldValue || !newValue) return false;
+
+  const oldNorm = oldValue.trim().toLowerCase();
+  const newNorm = newValue.trim().toLowerCase();
+
+  // Must be essentially the same content
+  if (oldNorm !== newNorm) return false;
+
+  // Check if old is ALL CAPS and new is not
+  const oldIsAllCaps = oldValue === oldValue.toUpperCase() && oldValue !== oldValue.toLowerCase();
+  const newIsAllCaps = newValue === newValue.toUpperCase() && newValue !== newValue.toLowerCase();
+
+  if (oldIsAllCaps && !newIsAllCaps) return true;
+
+  // Check if new has proper title case (first letter caps)
+  const newHasProperCase = newValue[0] === newValue[0].toUpperCase();
+  if (!newHasProperCase) return false;
+
+  return false;
+}
+
+/**
+ * Re-lookup a single book after manual edits to title/author/preliminaryTitle.
+ * Uses the current field values as the search query.
+ *
+ * Special behavior for HIGH confidence (green) books:
+ * - Only updates title/author with "cleaner" versions (e.g., "PLATT" → "Platt")
+ * - Does NOT overwrite with guesses or different content
+ * - Preserves user's manual entries
+ */
+window.relookupBook = async function(id) {
+  const book = state.books.find(b => b.id === id);
+  if (!book) return;
+
+  // Remember original confidence and values for protection
+  const wasHighConfidence = book.confidence === 'high';
+  const originalTitle = book.booktitle;
+  const originalAuthor = book.author;
+
+  // Build search query from current values (prefer booktitle, fallback to preliminaryTitle)
+  // If author is available, include it for better matching
+  let searchQuery = book.booktitle || book.preliminaryTitle || '';
+  if (book.author && searchQuery) {
+    searchQuery = `${searchQuery} ${book.author}`;
+  }
+
+  if (!searchQuery.trim()) {
+    showToast('Please enter a title or preliminary title first');
+    return;
+  }
+
+  // Show loading state on the button
+  const bookItem = document.querySelector(`.book-item[data-id="${id}"]`);
+  const lookupBtn = bookItem?.querySelector('.btn-lookup');
+  const originalText = lookupBtn?.innerHTML;
+  if (lookupBtn) {
+    lookupBtn.innerHTML = 'Looking up...';
+    lookupBtn.disabled = true;
+  }
+
+  try {
+    // Create a parsed book object for lookupBooks()
+    const parsedBook = {
+      rawText: book.rawOcr || book.preliminaryTitle || '',
+      possibleTitle: searchQuery,
+      possibleAuthor: book.author || ''
+    };
+
+    // Run lookup for this single book
+    const results = await lookupBooks([parsedBook]);
+
+    if (results && results.length > 0) {
+      const result = results[0];
+
+      if (wasHighConfidence) {
+        // GREEN (high confidence) book: user has corrected title/author
+        // Clear old (wrong) metadata first, then apply new lookup results
+        // This ensures wrong ISBN etc. from previous lookup is removed
+
+        // Only update title/author if result is high confidence AND it's a cleaner version
+        if (result.confidence === 'high') {
+          if (isCleanerVersion(originalTitle, result.booktitle)) {
+            book.booktitle = result.booktitle;
+          }
+          if (isCleanerVersion(originalAuthor, result.author)) {
+            book.author = result.author;
+          }
+        }
+        // Keep confidence as high - don't downgrade
+        book.confidence = 'high';
+
+        // Clear old metadata and replace with new lookup results (or empty)
+        // This removes wrong ISBN/cover etc. from previous incorrect lookup
+        book.isbn = result.isbn || '';
+        book.cover = result.cover || '';
+        book.publisher = result.publisher || '';
+        book.year = result.year || '';
+        book.language = result.language || '';
+        book.subjects = result.subjects || '';
+        book.description = result.description || '';
+        book.candidates = result.candidates || [];
+
+        showToast('Metadata refreshed (title/author preserved)');
+      } else {
+        // ORANGE/RED book: update everything, clear old wrong metadata first
+        book.booktitle = result.booktitle || book.booktitle;
+        book.author = result.author || book.author;
+        // Clear old metadata and replace with new (or empty if not found)
+        book.isbn = result.isbn || '';
+        book.cover = result.cover || '';
+        book.publisher = result.publisher || '';
+        book.year = result.year || '';
+        book.language = result.language || '';
+        book.subjects = result.subjects || '';
+        book.description = result.description || '';
+        book.confidence = result.confidence;
+        book.confidenceScore = result.confidenceScore;
+        book.confidenceSource = result.confidenceSource;
+        book.candidates = result.candidates || [];
+
+        // Show feedback
+        if (result.confidence === 'high') {
+          showToast(`Found: ${result.booktitle}`);
+        } else if (result.confidence === 'medium') {
+          showToast(`Possible match: ${result.booktitle || 'check candidates'}`);
+        } else {
+          showToast('No match found. Try editing the title.');
+        }
+      }
+    } else {
+      // No results found
+      if (wasHighConfidence) {
+        // Keep high confidence - user marked it as correct
+        showToast('No additional metadata found');
+      } else {
+        book.confidence = 'none';
+        showToast('No results found. Try a different search term.');
+      }
+    }
+
+    renderBooksList();
+    updateBookCounts();
+
+    // Re-expand the book item after re-render
+    const newBookItem = document.querySelector(`.book-item[data-id="${id}"]`);
+    if (newBookItem) newBookItem.classList.add('expanded');
+
+  } catch (error) {
+    console.error('Relookup error:', error);
+    showToast('Lookup failed. Please try again.');
+  } finally {
+    // Restore button state (will be re-rendered anyway, but just in case)
+    if (lookupBtn) {
+      lookupBtn.innerHTML = originalText;
+      lookupBtn.disabled = false;
+    }
+  }
+};
+
 window.addBook = function() {
   state.books.push({
     id: crypto.randomUUID(),
@@ -2184,11 +2886,6 @@ window.addBook = function() {
 };
 
 function updateBookCounts() {
-  const counts = { high: 0, medium: 0, none: 0 };
-  state.books.forEach(b => counts[b.confidence]++);
-  elements.countHigh.textContent = counts.high;
-  elements.countMedium.textContent = counts.medium;
-  elements.countNone.textContent = counts.none;
   elements.resultsCount.textContent = `${state.books.length} books detected`;
 }
 
@@ -2240,6 +2937,35 @@ window.toggleBookSelect = function(id, e) {
     item.classList.add('selected');
   } else {
     item.classList.remove('selected');
+  }
+};
+
+// Select or deselect all books (toggle)
+window.selectAll = function() {
+  if (state.books.length === 0) return;
+
+  // Check if all books are already selected
+  const allSelected = state.books.every(book => {
+    const el = document.querySelector(`.book-item[data-id="${book.id}"]`);
+    return el?.classList.contains('selected');
+  });
+
+  if (allSelected) {
+    // Deselect all
+    document.querySelectorAll('.book-item').forEach(el => {
+      el.classList.remove('selected');
+      const cb = el.querySelector('.book-select-cb');
+      if (cb) cb.checked = false;
+    });
+    showToast(`Deselected ${state.books.length} book(s)`);
+  } else {
+    // Select all
+    document.querySelectorAll('.book-item').forEach(el => {
+      el.classList.add('selected');
+      const cb = el.querySelector('.book-select-cb');
+      if (cb) cb.checked = true;
+    });
+    showToast(`Selected ${state.books.length} book(s)`);
   }
 };
 
@@ -2383,10 +3109,20 @@ function simpleMarkdownToHtml(md) {
 window.cycleConfidence = function(id) {
   const book = state.books.find(b => b.id === id);
   if (book) {
+    // Remember if this item was expanded
+    const bookItem = document.querySelector(`.book-item[data-id="${id}"]`);
+    const wasExpanded = bookItem?.classList.contains('expanded');
+
     const cycle = { none: 'medium', medium: 'high', high: 'none' };
     book.confidence = cycle[book.confidence] || 'none';
     renderBooksList();
     updateBookCounts();
+
+    // Re-expand if it was expanded before
+    if (wasExpanded) {
+      const newBookItem = document.querySelector(`.book-item[data-id="${id}"]`);
+      if (newBookItem) newBookItem.classList.add('expanded');
+    }
   }
 };
 
@@ -2417,7 +3153,8 @@ function generateMarkdown() {
   const shelfTags = state.shelfTags || '';
 
   // One file per book (Obsidian compatible format)
-  return state.books.map(book => {
+  // Sequence nummer toegevoegd om unieke bestandsnamen te garanderen in ZIP
+  return state.books.map((book, index) => {
     // For red (none confidence) items: use preliminary title, clear ALL other fields
     const isRed = book.confidence === 'none';
     const title = isRed ? (book.preliminaryTitle || book.booktitle || '') : (book.booktitle || '');
@@ -2429,19 +3166,26 @@ function generateMarkdown() {
     const year = isRed ? '' : (book.year || '');
     const language = isRed ? '' : (book.language || '');
     const description = isRed ? '' : (book.description || '');
-    // Combineer API subjects met user shelf tags
+    // Combine API subjects with user shelf tags, format as YAML block list
     const apiSubjects = isRed ? '' : (book.subjects || '');
-    const allTags = [shelfTags, apiSubjects].filter(t => t).join(', ');
+    const allTagsStr = [shelfTags, apiSubjects].filter(t => t).join(', ');
+    const tagsArray = allTagsStr.split(',').map(t => t.trim()).filter(t => t);
+    const tagsYaml = tagsArray.length > 0
+      ? `${fieldNames.tags}:\n` + tagsArray.map(t => `  - ${t}`).join('\n')
+      : `${fieldNames.tags}:`;
 
-    const filenamePattern = s.filenamePattern || '[author] - [booktitle].md';
-    const filename = sanitizeFilename(
+    // Sequence number (001, 002, etc.) for unique filenames
+    const seqNum = String(index + 1).padStart(3, '0');
+    // Force new pattern - ignore old saved settings that don't include author/title
+    const filenamePattern = '[author] - [booktitle] - [DATE]_[SEQ].md';
+    const baseFilename = sanitizeFilename(
       filenamePattern
         .replace('[author]', author || 'Unknown')
         .replace('[booktitle]', title || 'Untitled')
         .replace('[DATE]', new Date().toISOString().split('T')[0])
-        .replace('[TIME]', new Date().toTimeString().split(' ')[0].replace(/:/g, '-'))
+        .replace('[SEQ]', seqNum)
     );
-    const finalFilename = filename.endsWith('.md') ? filename : filename + '.md';
+    const finalFilename = baseFilename.endsWith('.md') ? baseFilename : baseFilename + '.md';
     // Volgorde gebaseerd op Goodreads CSV export
     const content = [
       '---',
@@ -2452,7 +3196,7 @@ function generateMarkdown() {
       `${fieldNames.publisher}: "${publisher}"`,
       `${fieldNames.year}: "${year}"`,
       `${fieldNames.language}: "${language}"`,
-      `${fieldNames.tags}: "${allTags}"`,
+      tagsYaml,
       s.includeConfidence ? `scan_confidence: ${book.confidence} (${Math.round((book.confidenceScore || 0) * 100)}%)` : null,
       s.includeConfidence && book.confidenceSource ? `scan_source_api: ${book.confidenceSource}` : null,
       s.includeMetadata ? `scan_source: "${state.currentImage?.filename || ''}"` : null,
@@ -2782,7 +3526,11 @@ function initEventListeners() {
   });
 
   // Navigation
-  elements.btnSettings.addEventListener('click', () => showScreen('settings'));
+  elements.btnSettings.addEventListener('click', () => {
+    // Remember which screen we came from so we can return to it
+    state.previousScreen = state.currentScreen;
+    showScreen('settings');
+  });
 
   // Info button - opent Libiry website
   elements.btnInfo.addEventListener('click', () => {
@@ -2791,12 +3539,14 @@ function initEventListeners() {
 
   // Support button - opent support pagina
   elements.btnSupport.addEventListener('click', () => {
-    window.open('https://sappelen.com/en/support-2/', '_blank');
+    window.open('https://libiry.org/Contributing', '_blank');
   });
 
   elements.btnSettingsBack.addEventListener('click', () => {
     collectSettings();
-    showScreen('main');
+    // Return to previous screen (results if we had scan data, otherwise main)
+    const returnTo = state.previousScreen || 'main';
+    showScreen(returnTo);
   });
 
   elements.btnCancel.addEventListener('click', () => {
@@ -2809,6 +3559,7 @@ function initEventListeners() {
     state.shelfTags = '';  // Reset tags voor nieuwe scan
     const tagsInput = document.getElementById('shelf-tags');
     if (tagsInput) tagsInput.value = '';
+    clearSession();  // Wis opgeslagen sessie
     showScreen('main');
   });
 
@@ -2839,7 +3590,6 @@ function initEventListeners() {
       downloadMarkdownAsZip();
     });
   }
-  elements.btnCopy.addEventListener('click', copyToClipboard);
 
   // Settings changes
   $('#setting-darkmode').addEventListener('change', (e) => {
@@ -2859,6 +3609,15 @@ function initEventListeners() {
 
   // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
+    // Don't intercept shortcuts when user is in an input field
+    const activeEl = document.activeElement;
+    const isInInput = activeEl && (
+      activeEl.tagName === 'INPUT' ||
+      activeEl.tagName === 'TEXTAREA' ||
+      activeEl.tagName === 'SELECT' ||
+      activeEl.isContentEditable
+    );
+
     if (e.ctrlKey || e.metaKey) {
       if (e.key === 'o') {
         e.preventDefault();
@@ -2866,7 +3625,8 @@ function initEventListeners() {
       } else if (e.key === 's' && state.currentScreen === 'results') {
         e.preventDefault();
         downloadMarkdown();
-      } else if (e.key === 'c' && state.currentScreen === 'results') {
+      } else if (e.key === 'c' && state.currentScreen === 'results' && !isInInput) {
+        // Only intercept Ctrl+C when NOT in an input field
         e.preventDefault();
         copyToClipboard();
       }
@@ -2964,14 +3724,109 @@ function init() {
   initPWAInstall();
   initOnlineStatus();
   initMobileGestures();
+  initSessionRestore();
   loadCustomizeSettings();
-  showScreen('main');
+
+  // Try to restore previous session (e.g., after tab was unloaded)
+  const restored = restoreSession();
+  if (!restored) {
+    showScreen('main');
+  }
 
   // Show/hide share button based on API availability
   const shareBtn = document.getElementById('btn-share');
   if (shareBtn && !navigator.share) shareBtn.style.display = 'none';
 
   console.log('Libiry BookSpineScanner initialized');
+}
+
+// ============================================================================
+// Session State Persistence
+// ============================================================================
+// Saves scan results to sessionStorage so they survive tab unload/reload.
+// This prevents losing work when browser unloads inactive tabs.
+
+function initSessionRestore() {
+  // Save state when page is about to be hidden or unloaded
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      saveSession();
+    }
+  });
+
+  window.addEventListener('beforeunload', () => {
+    saveSession();
+  });
+
+  // Also save periodically while on results screen (every 30 seconds)
+  setInterval(() => {
+    if (state.currentScreen === 'results' && state.books.length > 0) {
+      saveSession();
+    }
+  }, 30000);
+}
+
+function saveSession() {
+  // Only save if we have meaningful state to preserve
+  if (state.currentScreen !== 'results' || state.books.length === 0) {
+    return;
+  }
+
+  try {
+    const sessionData = {
+      currentScreen: state.currentScreen,
+      books: state.books,
+      currentImage: state.currentImage,
+      shelfTags: state.shelfTags,
+      timestamp: Date.now()
+    };
+    sessionStorage.setItem('bookspine-session', JSON.stringify(sessionData));
+    console.log('Session saved:', state.books.length, 'books');
+  } catch (e) {
+    console.warn('Failed to save session:', e);
+  }
+}
+
+function restoreSession() {
+  try {
+    const saved = sessionStorage.getItem('bookspine-session');
+    if (!saved) return false;
+
+    const sessionData = JSON.parse(saved);
+
+    // Check if session is recent (less than 1 hour old)
+    const age = Date.now() - (sessionData.timestamp || 0);
+    if (age > 60 * 60 * 1000) {
+      console.log('Session too old, discarding');
+      clearSession();
+      return false;
+    }
+
+    // Restore state
+    if (sessionData.books && sessionData.books.length > 0) {
+      state.books = sessionData.books;
+      state.currentImage = sessionData.currentImage;
+      state.shelfTags = sessionData.shelfTags || '';
+      state.currentScreen = sessionData.currentScreen;
+
+      // Show the results screen
+      showScreen('results');
+      showToast('Vorige sessie hersteld');
+      console.log('Session restored:', state.books.length, 'books');
+      return true;
+    }
+  } catch (e) {
+    console.warn('Failed to restore session:', e);
+  }
+  return false;
+}
+
+function clearSession() {
+  try {
+    sessionStorage.removeItem('bookspine-session');
+  } catch (e) {
+    console.warn('Failed to clear session:', e);
+  }
 }
 
 // ============================================================================
