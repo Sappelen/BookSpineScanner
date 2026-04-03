@@ -2,6 +2,8 @@
 
 Libiry BookSpineScanner is a Progressive Web App (PWA) that photographs bookshelves and extracts book metadata using OCR and book database lookups. It gives you flat '.md' (markdown) files, that can be used in Libiry (https://github.com/Sappelen/Libiry), Obsidian and other tools.
 
+Please go to https://libiry.org/2-Libiry-Bookspinescanner/ for the latest and most complete information about the app. What follows is just a summary.
+
 ## Getting started
 
 Open the app in your browser:
@@ -29,7 +31,7 @@ No installation required. Works on desktop and mobile.
 
 1. **Spine detection** -- OpenCV.js detects individual book spines in the photo
 2. **OCR** -- Text is read from each spine using Google Cloud Vision or Tesseract.js
-3. **Book lookup** -- Extracted text is searched in Open Library and/or Google Books
+3. **Book lookup** -- Extracted text is searched in various databases, a.o. Open Library and/or Google Books
 4. **Review** -- Results are shown with confidence indicators (green/orange/red)
 5. **Export** -- Save as markdown files
 
@@ -90,26 +92,10 @@ When you scan a bookshelf with your phone camera, the results may be different f
 - **Orange:** Medium confidence -- multiple candidates found, or moderate match (50-85%). Review and pick the right one.
 - **Red:** No match found, or OCR could not read enough text. You can enter the book details manually.
 
-Click on a confidence dot to cycle its status (red > orange > green > red).
-
-## Export formats
-
-### One file per photo (default)
-
-- YAML header with scan metadata
-- Each book as a block with 'key: value' lines
-- Compatible with Libiry, readable in any other text editor or reader
-
-### One file per book
-
-- One '.md' file per book
-- All metadata in YAML frontmatter
-- Compatible with Obsidian, Logseq, Calibre, Libiry and any other text editors or readers
-- Download as ZIP when exporting multiple books
+Click on a confidence indicator to cycle its status (red > orange > green > red).
 
 ## Customizing options
 
-Edit file 'customize/customize.txt' to change the app's appearance.
 If your existing Obsidian or Libiry setup uses different field names, you can configure them in Settings.
 
 ## Data and privacy
@@ -122,9 +108,8 @@ If your existing Obsidian or Libiry setup uses different field names, you can co
 ## Integration with Libiry
 
 1. Scan your bookshelf
-2. Review and correct the results
-3. Export as '.md'
-4. Place the '.md' file(s) in your Libiry book folder
+2. Review, correct and export the results
+4. Place the resulting '.md' file(s) in your Libiry book folder
 5. Refresh Libiry
 
 Libiry reads the fields 'cover', 'booktitle', 'author', 'isbn', 'publisher', 'year', 'language' and 'tags' from the markdown files.
